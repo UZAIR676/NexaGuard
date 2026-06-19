@@ -1,0 +1,2901 @@
+{
+  "top_gainers": [
+    {
+      "symbol": "WOLF",
+      "price": 57.41,
+      "change": 8.72,
+      "change_pct": 17.91,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ACMR",
+      "price": 109.87,
+      "change": 13.68,
+      "change_pct": 14.22,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "INTC",
+      "price": 133.99,
+      "change": 12.89,
+      "change_pct": 10.64,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SMCI",
+      "price": 30.66,
+      "change": 2.88,
+      "change_pct": 10.37,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ICHR",
+      "price": 98.61,
+      "change": 9.16,
+      "change_pct": 10.24,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SCOR",
+      "price": 7.95,
+      "change": 0.7,
+      "change_pct": 9.66,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MKSI",
+      "price": 406.37,
+      "change": 35.11,
+      "change_pct": 9.46,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "RKT",
+      "price": 14.42,
+      "change": 1.2,
+      "change_pct": 9.08,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "KLAC",
+      "price": 259.56,
+      "change": 20.83,
+      "change_pct": 8.73,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MU",
+      "price": 1133.99,
+      "change": 90.8,
+      "change_pct": 8.7,
+      "signal": "STRONG BUY"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "KR",
+      "price": 56.61,
+      "change": -5.21,
+      "change_pct": -8.43,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "STLD",
+      "price": 249.91,
+      "change": -20.22,
+      "change_pct": -7.49,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "ACI",
+      "price": 13.45,
+      "change": -0.96,
+      "change_pct": -6.66,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "MSC",
+      "price": 1.92,
+      "change": -0.11,
+      "change_pct": -5.42,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "NOC",
+      "price": 521.5,
+      "change": -28.65,
+      "change_pct": -5.21,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CABO",
+      "price": 40.99,
+      "change": -2.08,
+      "change_pct": -4.83,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "SLB",
+      "price": 48.09,
+      "change": -2.24,
+      "change_pct": -4.45,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CHTR",
+      "price": 126.23,
+      "change": -5.77,
+      "change_pct": -4.37,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CCI",
+      "price": 82.05,
+      "change": -3.72,
+      "change_pct": -4.34,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "OLN",
+      "price": 22.01,
+      "change": -0.99,
+      "change_pct": -4.3,
+      "signal": "STRONG SELL"
+    }
+  ],
+  "timestamp": "2026-06-18T20:01:59.993909",
+  "total_scanned": 393,
+  "all_data": [
+    {
+      "symbol": "CLX",
+      "price": 95.8,
+      "change": 0.83,
+      "change_pct": 0.87,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "AVGO",
+      "price": 411.35,
+      "change": 18.45,
+      "change_pct": 4.7,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "XLU",
+      "price": 44.76,
+      "change": 0.3,
+      "change_pct": 0.67,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "DXCM",
+      "price": 72.47,
+      "change": 1.24,
+      "change_pct": 1.74,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "WEX",
+      "price": 127.53,
+      "change": 0.67,
+      "change_pct": 0.53,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ZG",
+      "price": 32.49,
+      "change": 0.24,
+      "change_pct": 0.74,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CMS",
+      "price": 73.38,
+      "change": 0.07,
+      "change_pct": 0.1,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TXN",
+      "price": 322.86,
+      "change": 20.98,
+      "change_pct": 6.95,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "BA",
+      "price": 222.72,
+      "change": -2.91,
+      "change_pct": -1.29,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ZM",
+      "price": 86.36,
+      "change": -1.03,
+      "change_pct": -1.18,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "TMO",
+      "price": 464.61,
+      "change": 2.92,
+      "change_pct": 0.63,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "UAL",
+      "price": 118.32,
+      "change": 2.49,
+      "change_pct": 2.15,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "TGT",
+      "price": 130.74,
+      "change": 2.93,
+      "change_pct": 2.29,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "LC",
+      "price": 19.21,
+      "change": 0.4,
+      "change_pct": 2.13,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "VEA",
+      "price": 72.31,
+      "change": 0.31,
+      "change_pct": 0.43,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ZBH",
+      "price": 87.97,
+      "change": 0.81,
+      "change_pct": 0.93,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PUBM",
+      "price": 11.3,
+      "change": 0.0,
+      "change_pct": 0.0,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TSLA",
+      "price": 400.49,
+      "change": 4.11,
+      "change_pct": 1.04,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "LRCX",
+      "price": 389.04,
+      "change": 14.86,
+      "change_pct": 3.97,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CDNS",
+      "price": 387.39,
+      "change": -2.21,
+      "change_pct": -0.57,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "DRI",
+      "price": 213.45,
+      "change": 2.12,
+      "change_pct": 1.0,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "COUR",
+      "price": 5.35,
+      "change": 0.05,
+      "change_pct": 0.94,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ABBV",
+      "price": 216.49,
+      "change": -4.74,
+      "change_pct": -2.14,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "XLI",
+      "price": 180.91,
+      "change": 1.31,
+      "change_pct": 0.73,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "NNN",
+      "price": 45.0,
+      "change": -0.13,
+      "change_pct": -0.29,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MSFT",
+      "price": 379.4,
+      "change": 0.49,
+      "change_pct": 0.13,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "S",
+      "price": 15.02,
+      "change": 0.22,
+      "change_pct": 1.49,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "DIS",
+      "price": 103.89,
+      "change": 3.03,
+      "change_pct": 3.0,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "LNT",
+      "price": 73.0,
+      "change": 0.18,
+      "change_pct": 0.25,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "META",
+      "price": 577.22,
+      "change": 9.64,
+      "change_pct": 1.7,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ARKX",
+      "price": 34.56,
+      "change": 0.05,
+      "change_pct": 0.14,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EMR",
+      "price": 150.66,
+      "change": 1.66,
+      "change_pct": 1.11,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MELI",
+      "price": 1635.15,
+      "change": 3.33,
+      "change_pct": 0.2,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PPL",
+      "price": 35.38,
+      "change": 0.05,
+      "change_pct": 0.14,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "T",
+      "price": 22.01,
+      "change": -0.43,
+      "change_pct": -1.92,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "UCTT",
+      "price": 121.28,
+      "change": 9.67,
+      "change_pct": 8.66,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "GILD",
+      "price": 123.76,
+      "change": -1.69,
+      "change_pct": -1.35,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "MPC",
+      "price": 242.91,
+      "change": -1.7,
+      "change_pct": -0.69,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "FCX",
+      "price": 68.68,
+      "change": -0.38,
+      "change_pct": -0.55,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "AVA",
+      "price": 39.76,
+      "change": 0.36,
+      "change_pct": 0.91,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PSMT",
+      "price": 182.02,
+      "change": 3.59,
+      "change_pct": 2.01,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "FANG",
+      "price": 183.5,
+      "change": -1.98,
+      "change_pct": -1.07,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "WFC",
+      "price": 82.2,
+      "change": -1.61,
+      "change_pct": -1.92,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "FTI",
+      "price": 65.17,
+      "change": -1.84,
+      "change_pct": -2.75,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "PATH",
+      "price": 10.27,
+      "change": 0.04,
+      "change_pct": 0.39,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AME",
+      "price": 237.42,
+      "change": 6.15,
+      "change_pct": 2.66,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "NVDA",
+      "price": 210.69,
+      "change": 6.04,
+      "change_pct": 2.95,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "EQT",
+      "price": 50.72,
+      "change": -0.41,
+      "change_pct": -0.8,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "EA",
+      "price": 202.15,
+      "change": -0.87,
+      "change_pct": -0.43,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TMUS",
+      "price": 181.67,
+      "change": 0.36,
+      "change_pct": 0.2,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "SWKS",
+      "price": 72.45,
+      "change": 3.07,
+      "change_pct": 4.42,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "PPG",
+      "price": 118.25,
+      "change": 1.11,
+      "change_pct": 0.95,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SIL",
+      "price": 83.73,
+      "change": -2.22,
+      "change_pct": -2.58,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "KO",
+      "price": 79.39,
+      "change": -0.54,
+      "change_pct": -0.68,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "CF",
+      "price": 102.93,
+      "change": -2.92,
+      "change_pct": -2.76,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "AFRM",
+      "price": 73.92,
+      "change": 3.19,
+      "change_pct": 4.51,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "GOOGL",
+      "price": 368.03,
+      "change": 4.24,
+      "change_pct": 1.17,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "AMAT",
+      "price": 617.11,
+      "change": 24.19,
+      "change_pct": 4.08,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "BILL",
+      "price": 32.47,
+      "change": 0.28,
+      "change_pct": 0.87,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "EVRG",
+      "price": 82.5,
+      "change": -0.35,
+      "change_pct": -0.42,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TEAM",
+      "price": 82.72,
+      "change": -1.67,
+      "change_pct": -1.98,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "LLY",
+      "price": 1098.57,
+      "change": -13.43,
+      "change_pct": -1.21,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ESS",
+      "price": 273.71,
+      "change": -0.69,
+      "change_pct": -0.25,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EMN",
+      "price": 72.49,
+      "change": 0.37,
+      "change_pct": 0.51,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "COPX",
+      "price": 85.48,
+      "change": -1.28,
+      "change_pct": -1.48,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "RBLX",
+      "price": 51.53,
+      "change": 3.51,
+      "change_pct": 7.31,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "PSA",
+      "price": 318.12,
+      "change": 5.54,
+      "change_pct": 1.77,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PODD",
+      "price": 145.76,
+      "change": 2.24,
+      "change_pct": 1.56,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "INTC",
+      "price": 133.99,
+      "change": 12.89,
+      "change_pct": 10.64,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ACMR",
+      "price": 109.87,
+      "change": 13.68,
+      "change_pct": 14.22,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "BNDX",
+      "price": 48.35,
+      "change": 0.04,
+      "change_pct": 0.08,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MKSI",
+      "price": 406.37,
+      "change": 35.11,
+      "change_pct": 9.46,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MNST",
+      "price": 91.34,
+      "change": -0.32,
+      "change_pct": -0.35,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MTDR",
+      "price": 49.56,
+      "change": -0.84,
+      "change_pct": -1.67,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "BAC",
+      "price": 56.2,
+      "change": -0.33,
+      "change_pct": -0.58,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "TTD",
+      "price": 18.51,
+      "change": 0.35,
+      "change_pct": 1.93,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ADI",
+      "price": 434.46,
+      "change": 20.01,
+      "change_pct": 4.83,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SBUX",
+      "price": 100.65,
+      "change": 0.83,
+      "change_pct": 0.83,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "NEM",
+      "price": 103.79,
+      "change": -1.88,
+      "change_pct": -1.78,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "SNOW",
+      "price": 232.29,
+      "change": -2.23,
+      "change_pct": -0.95,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PEP",
+      "price": 142.02,
+      "change": 0.43,
+      "change_pct": 0.3,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "OXY",
+      "price": 51.82,
+      "change": -1.22,
+      "change_pct": -2.3,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "RKT",
+      "price": 14.42,
+      "change": 1.2,
+      "change_pct": 9.08,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "VRTX",
+      "price": 451.63,
+      "change": -7.36,
+      "change_pct": -1.6,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NTRS",
+      "price": 172.11,
+      "change": -2.84,
+      "change_pct": -1.62,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "AXP",
+      "price": 338.0,
+      "change": -2.54,
+      "change_pct": -0.75,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ABT",
+      "price": 88.41,
+      "change": -0.09,
+      "change_pct": -0.1,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AEHR",
+      "price": 115.3,
+      "change": 2.68,
+      "change_pct": 2.38,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ED",
+      "price": 106.36,
+      "change": -0.68,
+      "change_pct": -0.64,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "YUM",
+      "price": 151.99,
+      "change": -2.08,
+      "change_pct": -1.35,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "BLK",
+      "price": 1050.09,
+      "change": -7.29,
+      "change_pct": -0.69,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "RRC",
+      "price": 36.39,
+      "change": -0.27,
+      "change_pct": -0.74,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "LBRDK",
+      "price": 29.62,
+      "change": -1.25,
+      "change_pct": -4.05,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CEG",
+      "price": 274.06,
+      "change": 6.89,
+      "change_pct": 2.58,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "AMT",
+      "price": 176.05,
+      "change": -5.04,
+      "change_pct": -2.78,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "BMRN",
+      "price": 54.69,
+      "change": -0.33,
+      "change_pct": -0.6,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PAYO",
+      "price": 7.02,
+      "change": 0.0,
+      "change_pct": 0.0,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "GTLB",
+      "price": 26.56,
+      "change": 0.09,
+      "change_pct": 0.34,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AAL",
+      "price": 15.99,
+      "change": 0.57,
+      "change_pct": 3.7,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ISRG",
+      "price": 406.78,
+      "change": 4.6,
+      "change_pct": 1.14,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "VLO",
+      "price": 236.3,
+      "change": -3.47,
+      "change_pct": -1.45,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NOV",
+      "price": 18.66,
+      "change": -0.64,
+      "change_pct": -3.32,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "OPEN",
+      "price": 4.47,
+      "change": 0.02,
+      "change_pct": 0.45,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "HON",
+      "price": 229.01,
+      "change": 0.4,
+      "change_pct": 0.17,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "GDX",
+      "price": 82.51,
+      "change": -1.85,
+      "change_pct": -2.19,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "NOC",
+      "price": 521.5,
+      "change": -28.65,
+      "change_pct": -5.21,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "DVN",
+      "price": 42.12,
+      "change": -0.46,
+      "change_pct": -1.08,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "FIVN",
+      "price": 19.4,
+      "change": 0.04,
+      "change_pct": 0.21,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "LYV",
+      "price": 171.24,
+      "change": -0.28,
+      "change_pct": -0.16,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TJX",
+      "price": 163.81,
+      "change": -0.32,
+      "change_pct": -0.19,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EMB",
+      "price": 96.73,
+      "change": 0.45,
+      "change_pct": 0.47,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PCAR",
+      "price": 118.95,
+      "change": 1.61,
+      "change_pct": 1.37,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MKC",
+      "price": 46.64,
+      "change": 0.15,
+      "change_pct": 0.32,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ARKF",
+      "price": 40.03,
+      "change": 0.39,
+      "change_pct": 0.98,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CNX",
+      "price": 32.67,
+      "change": -0.17,
+      "change_pct": -0.52,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "CAG",
+      "price": 13.2,
+      "change": 0.04,
+      "change_pct": 0.3,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "HOOD",
+      "price": 108.15,
+      "change": 2.95,
+      "change_pct": 2.8,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CMCSA",
+      "price": 22.43,
+      "change": -0.26,
+      "change_pct": -1.15,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ICHR",
+      "price": 98.61,
+      "change": 9.16,
+      "change_pct": 10.24,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MUB",
+      "price": 107.33,
+      "change": 0.35,
+      "change_pct": 0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "XLV",
+      "price": 149.4,
+      "change": -1.31,
+      "change_pct": -0.87,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ETN",
+      "price": 421.77,
+      "change": 12.13,
+      "change_pct": 2.96,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CL",
+      "price": 89.48,
+      "change": -1.1,
+      "change_pct": -1.21,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "DIA",
+      "price": 515.52,
+      "change": -0.78,
+      "change_pct": -0.15,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AMD",
+      "price": 537.37,
+      "change": 24.89,
+      "change_pct": 4.86,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MCD",
+      "price": 278.61,
+      "change": -5.21,
+      "change_pct": -1.84,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "GWW",
+      "price": 1365.41,
+      "change": 54.31,
+      "change_pct": 4.14,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "KNTK",
+      "price": 46.53,
+      "change": 0.8,
+      "change_pct": 1.75,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "FTNT",
+      "price": 144.73,
+      "change": 0.59,
+      "change_pct": 0.41,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "UNH",
+      "price": 400.96,
+      "change": 1.43,
+      "change_pct": 0.36,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ETR",
+      "price": 111.11,
+      "change": 0.25,
+      "change_pct": 0.23,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AIV",
+      "price": 2.9,
+      "change": 0.0,
+      "change_pct": 0.0,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PH",
+      "price": 953.27,
+      "change": 7.3,
+      "change_pct": 0.77,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PEG",
+      "price": 79.89,
+      "change": 0.49,
+      "change_pct": 0.62,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "LQD",
+      "price": 109.07,
+      "change": 0.3,
+      "change_pct": 0.28,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MAA",
+      "price": 132.5,
+      "change": -0.61,
+      "change_pct": -0.46,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "WMT",
+      "price": 117.18,
+      "change": -0.95,
+      "change_pct": -0.8,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "TREX",
+      "price": 47.13,
+      "change": 1.68,
+      "change_pct": 3.7,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "USB",
+      "price": 58.14,
+      "change": 0.23,
+      "change_pct": 0.4,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "APD",
+      "price": 280.21,
+      "change": -1.54,
+      "change_pct": -0.55,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PANW",
+      "price": 287.78,
+      "change": 5.65,
+      "change_pct": 2.0,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "GS",
+      "price": 1096.56,
+      "change": -2.58,
+      "change_pct": -0.23,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ROST",
+      "price": 232.8,
+      "change": -0.45,
+      "change_pct": -0.19,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CCI",
+      "price": 82.05,
+      "change": -3.72,
+      "change_pct": -4.34,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CHRD",
+      "price": 123.12,
+      "change": -3.85,
+      "change_pct": -3.03,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "UI",
+      "price": 589.46,
+      "change": 26.64,
+      "change_pct": 4.73,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "PG",
+      "price": 150.38,
+      "change": -0.18,
+      "change_pct": -0.12,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ARKQ",
+      "price": 133.17,
+      "change": 1.73,
+      "change_pct": 1.32,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CAT",
+      "price": 985.82,
+      "change": 29.9,
+      "change_pct": 3.13,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "GIS",
+      "price": 33.42,
+      "change": 0.06,
+      "change_pct": 0.18,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PCOR",
+      "price": 39.99,
+      "change": -0.11,
+      "change_pct": -0.27,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ARKG",
+      "price": 36.86,
+      "change": 1.82,
+      "change_pct": 5.19,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "IVV",
+      "price": 750.11,
+      "change": 7.5,
+      "change_pct": 1.01,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ECL",
+      "price": 269.12,
+      "change": 0.06,
+      "change_pct": 0.02,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "DE",
+      "price": 589.24,
+      "change": 0.77,
+      "change_pct": 0.13,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EDIT",
+      "price": 2.69,
+      "change": 0.14,
+      "change_pct": 5.49,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "UNG",
+      "price": 11.74,
+      "change": 0.17,
+      "change_pct": 1.47,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "DDOG",
+      "price": 223.0,
+      "change": -3.63,
+      "change_pct": -1.6,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "USO",
+      "price": 114.87,
+      "change": 0.64,
+      "change_pct": 0.56,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MTCH",
+      "price": 35.45,
+      "change": 0.14,
+      "change_pct": 0.4,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "GOOG",
+      "price": 367.46,
+      "change": 5.36,
+      "change_pct": 1.48,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PLD",
+      "price": 140.54,
+      "change": -0.4,
+      "change_pct": -0.28,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "LMT",
+      "price": 510.95,
+      "change": -21.37,
+      "change_pct": -4.01,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "NOW",
+      "price": 95.04,
+      "change": -0.44,
+      "change_pct": -0.46,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MTB",
+      "price": 225.12,
+      "change": -0.73,
+      "change_pct": -0.32,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TECH",
+      "price": 57.94,
+      "change": 2.94,
+      "change_pct": 5.35,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SMCI",
+      "price": 30.66,
+      "change": 2.88,
+      "change_pct": 10.37,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "PM",
+      "price": 178.4,
+      "change": -1.04,
+      "change_pct": -0.58,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "VRSK",
+      "price": 173.8,
+      "change": -1.55,
+      "change_pct": -0.88,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "HUBS",
+      "price": 176.03,
+      "change": -0.68,
+      "change_pct": -0.38,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PLTR",
+      "price": 128.47,
+      "change": -2.16,
+      "change_pct": -1.65,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "DLR",
+      "price": 188.15,
+      "change": 1.07,
+      "change_pct": 0.57,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "EQR",
+      "price": 64.09,
+      "change": -0.54,
+      "change_pct": -0.84,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "BKR",
+      "price": 58.41,
+      "change": -1.66,
+      "change_pct": -2.76,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "PSX",
+      "price": 166.14,
+      "change": -1.03,
+      "change_pct": -0.62,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "BEAM",
+      "price": 34.14,
+      "change": 1.66,
+      "change_pct": 5.11,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "KEY",
+      "price": 22.59,
+      "change": -0.01,
+      "change_pct": -0.04,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PCTY",
+      "price": 101.06,
+      "change": 0.55,
+      "change_pct": 0.55,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "QCOM",
+      "price": 226.11,
+      "change": 13.14,
+      "change_pct": 6.17,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "VICI",
+      "price": 26.28,
+      "change": -0.95,
+      "change_pct": -3.49,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "ABNB",
+      "price": 142.41,
+      "change": 1.87,
+      "change_pct": 1.33,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SPG",
+      "price": 211.33,
+      "change": 1.47,
+      "change_pct": 0.7,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "IWM",
+      "price": 295.59,
+      "change": 5.71,
+      "change_pct": 1.97,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CHD",
+      "price": 95.63,
+      "change": -1.78,
+      "change_pct": -1.83,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "TLT",
+      "price": 86.75,
+      "change": 0.42,
+      "change_pct": 0.49,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "IZRL",
+      "price": 29.8,
+      "change": 0.32,
+      "change_pct": 1.09,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "DUK",
+      "price": 123.86,
+      "change": 0.13,
+      "change_pct": 0.11,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ZION",
+      "price": 66.17,
+      "change": 0.02,
+      "change_pct": 0.03,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ESTC",
+      "price": 58.97,
+      "change": 0.41,
+      "change_pct": 0.7,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "BJ",
+      "price": 85.22,
+      "change": -1.57,
+      "change_pct": -1.81,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "XLP",
+      "price": 83.3,
+      "change": -0.38,
+      "change_pct": -0.45,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "REMX",
+      "price": 95.55,
+      "change": -0.49,
+      "change_pct": -0.51,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "CPT",
+      "price": 108.99,
+      "change": -0.36,
+      "change_pct": -0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AMBA",
+      "price": 69.97,
+      "change": 4.09,
+      "change_pct": 6.21,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "FDX",
+      "price": 326.2,
+      "change": 0.27,
+      "change_pct": 0.08,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "QRVO",
+      "price": 98.42,
+      "change": 3.77,
+      "change_pct": 3.98,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CARS",
+      "price": 9.95,
+      "change": 0.13,
+      "change_pct": 1.32,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "POR",
+      "price": 50.18,
+      "change": 0.38,
+      "change_pct": 0.76,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "LOW",
+      "price": 222.2,
+      "change": 4.93,
+      "change_pct": 2.27,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "FLYW",
+      "price": 15.85,
+      "change": 0.43,
+      "change_pct": 2.79,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "VOO",
+      "price": 688.11,
+      "change": 6.7,
+      "change_pct": 0.98,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "AZO",
+      "price": 3064.48,
+      "change": 4.85,
+      "change_pct": 0.16,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "SRE",
+      "price": 90.69,
+      "change": 0.44,
+      "change_pct": 0.49,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "POST",
+      "price": 88.41,
+      "change": -0.55,
+      "change_pct": -0.62,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ORLY",
+      "price": 86.84,
+      "change": -1.56,
+      "change_pct": -1.76,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "VTI",
+      "price": 369.99,
+      "change": 4.23,
+      "change_pct": 1.16,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "BSX",
+      "price": 45.29,
+      "change": 0.34,
+      "change_pct": 0.76,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SNAP",
+      "price": 4.66,
+      "change": -0.08,
+      "change_pct": -1.69,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "SYY",
+      "price": 78.7,
+      "change": -0.3,
+      "change_pct": -0.38,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ORCL",
+      "price": 184.29,
+      "change": 0.76,
+      "change_pct": 0.41,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EQIX",
+      "price": 1092.19,
+      "change": 3.67,
+      "change_pct": 0.34,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CE",
+      "price": 51.16,
+      "change": -0.07,
+      "change_pct": -0.14,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MOS",
+      "price": 22.9,
+      "change": 0.39,
+      "change_pct": 1.73,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CHTR",
+      "price": 126.23,
+      "change": -5.77,
+      "change_pct": -4.37,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "COST",
+      "price": 951.45,
+      "change": -14.14,
+      "change_pct": -1.46,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PAYC",
+      "price": 124.85,
+      "change": 1.13,
+      "change_pct": 0.91,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "O",
+      "price": 60.24,
+      "change": -0.33,
+      "change_pct": -0.54,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "OLED",
+      "price": 88.94,
+      "change": 4.42,
+      "change_pct": 5.23,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "AVB",
+      "price": 177.32,
+      "change": -2.31,
+      "change_pct": -1.29,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "WAL",
+      "price": 79.91,
+      "change": 1.48,
+      "change_pct": 1.89,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "LIN",
+      "price": 512.15,
+      "change": -3.7,
+      "change_pct": -0.72,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "EXPD",
+      "price": 161.32,
+      "change": 0.71,
+      "change_pct": 0.44,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "HRL",
+      "price": 24.16,
+      "change": -0.17,
+      "change_pct": -0.7,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NFLX",
+      "price": 77.38,
+      "change": 0.42,
+      "change_pct": 0.55,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "VZ",
+      "price": 45.37,
+      "change": -0.47,
+      "change_pct": -1.03,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "RPD",
+      "price": 6.73,
+      "change": -0.04,
+      "change_pct": -0.59,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "TTWO",
+      "price": 239.28,
+      "change": 11.25,
+      "change_pct": 4.93,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "HYG",
+      "price": 80.01,
+      "change": 0.28,
+      "change_pct": 0.35,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "COIN",
+      "price": 163.26,
+      "change": -1.66,
+      "change_pct": -1.01,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "KDP",
+      "price": 30.76,
+      "change": -0.13,
+      "change_pct": -0.42,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AAPL",
+      "price": 298.01,
+      "change": 2.06,
+      "change_pct": 0.7,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MRK",
+      "price": 113.87,
+      "change": -1.57,
+      "change_pct": -1.36,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "MDLZ",
+      "price": 60.12,
+      "change": -0.74,
+      "change_pct": -1.22,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ADBE",
+      "price": 195.16,
+      "change": -1.12,
+      "change_pct": -0.57,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "CFG",
+      "price": 67.08,
+      "change": 0.3,
+      "change_pct": 0.45,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "XOM",
+      "price": 137.81,
+      "change": -2.93,
+      "change_pct": -2.08,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "OLN",
+      "price": 22.01,
+      "change": -0.99,
+      "change_pct": -4.3,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "MDB",
+      "price": 332.75,
+      "change": -1.94,
+      "change_pct": -0.58,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "BKNG",
+      "price": 171.78,
+      "change": 0.15,
+      "change_pct": 0.09,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "WELL",
+      "price": 206.65,
+      "change": 0.1,
+      "change_pct": 0.05,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "APA",
+      "price": 33.03,
+      "change": -0.9,
+      "change_pct": -2.65,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "C",
+      "price": 143.06,
+      "change": -0.72,
+      "change_pct": -0.5,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "AES",
+      "price": 14.62,
+      "change": 0.01,
+      "change_pct": 0.07,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "BAND",
+      "price": 51.39,
+      "change": 0.55,
+      "change_pct": 1.08,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "GDXJ",
+      "price": 107.22,
+      "change": -2.57,
+      "change_pct": -2.34,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "SLV",
+      "price": 59.51,
+      "change": -1.1,
+      "change_pct": -1.81,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "VWO",
+      "price": 60.77,
+      "change": 0.96,
+      "change_pct": 1.61,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "GE",
+      "price": 357.64,
+      "change": 0.61,
+      "change_pct": 0.17,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ALNY",
+      "price": 278.09,
+      "change": -4.63,
+      "change_pct": -1.64,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "XYL",
+      "price": 111.42,
+      "change": 1.13,
+      "change_pct": 1.02,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "KMB",
+      "price": 102.56,
+      "change": 1.09,
+      "change_pct": 1.07,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "IDXX",
+      "price": 562.09,
+      "change": 16.0,
+      "change_pct": 2.93,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "DV",
+      "price": 10.33,
+      "change": -0.04,
+      "change_pct": -0.39,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MRNA",
+      "price": 63.96,
+      "change": 2.16,
+      "change_pct": 3.5,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "DLTR",
+      "price": 111.65,
+      "change": 5.24,
+      "change_pct": 4.92,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "IFF",
+      "price": 76.72,
+      "change": 0.67,
+      "change_pct": 0.88,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "NEE",
+      "price": 86.75,
+      "change": 1.02,
+      "change_pct": 1.19,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "EXC",
+      "price": 45.81,
+      "change": 0.25,
+      "change_pct": 0.55,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MGM",
+      "price": 46.84,
+      "change": -0.1,
+      "change_pct": -0.21,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "DHR",
+      "price": 177.17,
+      "change": -0.59,
+      "change_pct": -0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "SM",
+      "price": 27.14,
+      "change": -0.95,
+      "change_pct": -3.38,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "CRL",
+      "price": 185.0,
+      "change": 2.66,
+      "change_pct": 1.46,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CRWD",
+      "price": 684.86,
+      "change": 1.9,
+      "change_pct": 0.28,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ONTO",
+      "price": 333.76,
+      "change": 14.84,
+      "change_pct": 4.65,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "REGN",
+      "price": 609.94,
+      "change": 2.01,
+      "change_pct": 0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "BIIB",
+      "price": 196.58,
+      "change": -2.09,
+      "change_pct": -1.05,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "XLB",
+      "price": 51.81,
+      "change": -0.21,
+      "change_pct": -0.4,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "LBRDA",
+      "price": 29.54,
+      "change": -1.29,
+      "change_pct": -4.18,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "MGNI",
+      "price": 17.89,
+      "change": -0.35,
+      "change_pct": -1.92,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "RTX",
+      "price": 185.6,
+      "change": -6.98,
+      "change_pct": -3.62,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "OKTA",
+      "price": 117.81,
+      "change": 4.78,
+      "change_pct": 4.23,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "BAX",
+      "price": 19.89,
+      "change": 0.5,
+      "change_pct": 2.58,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "COHU",
+      "price": 69.4,
+      "change": 3.95,
+      "change_pct": 6.04,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "DAL",
+      "price": 84.18,
+      "change": 1.93,
+      "change_pct": 2.35,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "DUOL",
+      "price": 125.56,
+      "change": 2.17,
+      "change_pct": 1.76,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "IQV",
+      "price": 167.77,
+      "change": -2.9,
+      "change_pct": -1.7,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PFSI",
+      "price": 82.38,
+      "change": 1.18,
+      "change_pct": 1.45,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "CSCO",
+      "price": 119.54,
+      "change": 2.21,
+      "change_pct": 1.88,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "BDX",
+      "price": 143.98,
+      "change": 2.37,
+      "change_pct": 1.67,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "WBD",
+      "price": 26.2,
+      "change": -0.04,
+      "change_pct": -0.15,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "TFC",
+      "price": 48.33,
+      "change": 0.16,
+      "change_pct": 0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "QQQ",
+      "price": 740.62,
+      "change": 18.11,
+      "change_pct": 2.51,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "URA",
+      "price": 47.78,
+      "change": 0.68,
+      "change_pct": 1.44,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "BND",
+      "price": 73.34,
+      "change": 0.2,
+      "change_pct": 0.27,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "OGE",
+      "price": 47.3,
+      "change": -0.04,
+      "change_pct": -0.08,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MS",
+      "price": 223.17,
+      "change": -1.79,
+      "change_pct": -0.8,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "FE",
+      "price": 46.45,
+      "change": 0.31,
+      "change_pct": 0.67,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "MBB",
+      "price": 94.48,
+      "change": 0.29,
+      "change_pct": 0.31,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "DG",
+      "price": 113.45,
+      "change": 4.76,
+      "change_pct": 4.38,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "XLK",
+      "price": 191.44,
+      "change": 5.64,
+      "change_pct": 3.04,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CVX",
+      "price": 173.63,
+      "change": -3.95,
+      "change_pct": -2.22,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "SLB",
+      "price": 48.09,
+      "change": -2.24,
+      "change_pct": -4.45,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "MSC",
+      "price": 1.92,
+      "change": -0.11,
+      "change_pct": -5.42,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "NET",
+      "price": 224.06,
+      "change": -2.81,
+      "change_pct": -1.24,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NKE",
+      "price": 45.2,
+      "change": 1.01,
+      "change_pct": 2.29,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "WDAY",
+      "price": 116.93,
+      "change": -4.9,
+      "change_pct": -4.02,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "LIT",
+      "price": 82.15,
+      "change": -0.92,
+      "change_pct": -1.11,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "GO",
+      "price": 9.26,
+      "change": -0.22,
+      "change_pct": -2.32,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "RS",
+      "price": 396.34,
+      "change": -7.77,
+      "change_pct": -1.92,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "PYPL",
+      "price": 42.51,
+      "change": 0.43,
+      "change_pct": 1.02,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ALB",
+      "price": 160.35,
+      "change": -6.21,
+      "change_pct": -3.73,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "UWM",
+      "price": 65.2,
+      "change": 2.34,
+      "change_pct": 3.72,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "HD",
+      "price": 334.28,
+      "change": 6.8,
+      "change_pct": 2.08,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "HAL",
+      "price": 34.93,
+      "change": -1.3,
+      "change_pct": -3.59,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "D",
+      "price": 68.41,
+      "change": 0.39,
+      "change_pct": 0.57,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SJM",
+      "price": 110.86,
+      "change": -2.1,
+      "change_pct": -1.86,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "FMC",
+      "price": 11.55,
+      "change": -0.43,
+      "change_pct": -3.59,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "Z",
+      "price": 32.11,
+      "change": 0.1,
+      "change_pct": 0.31,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PNC",
+      "price": 232.04,
+      "change": -1.09,
+      "change_pct": -0.47,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "FITB",
+      "price": 52.74,
+      "change": 0.16,
+      "change_pct": 0.3,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CRGY",
+      "price": 10.44,
+      "change": -0.34,
+      "change_pct": -3.15,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "AMZN",
+      "price": 244.39,
+      "change": 6.89,
+      "change_pct": 2.9,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "HBAN",
+      "price": 16.86,
+      "change": 0.01,
+      "change_pct": 0.06,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ACLS",
+      "price": 187.53,
+      "change": 12.08,
+      "change_pct": 6.89,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ILMN",
+      "price": 161.93,
+      "change": 2.84,
+      "change_pct": 1.79,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "XLRE",
+      "price": 43.86,
+      "change": -0.11,
+      "change_pct": -0.25,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CMG",
+      "price": 32.49,
+      "change": 0.63,
+      "change_pct": 1.98,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SOFI",
+      "price": 17.91,
+      "change": 0.49,
+      "change_pct": 2.81,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "FORM",
+      "price": 149.55,
+      "change": 9.6,
+      "change_pct": 6.86,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CDW",
+      "price": 128.37,
+      "change": 1.67,
+      "change_pct": 1.32,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "COP",
+      "price": 107.74,
+      "change": -3.47,
+      "change_pct": -3.12,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "ASML",
+      "price": 1929.68,
+      "change": 61.85,
+      "change_pct": 3.31,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "WOLF",
+      "price": 57.41,
+      "change": 8.72,
+      "change_pct": 17.91,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CABO",
+      "price": 40.99,
+      "change": -2.08,
+      "change_pct": -4.83,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "U",
+      "price": 27.48,
+      "change": 1.01,
+      "change_pct": 3.82,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "AMGN",
+      "price": 337.6,
+      "change": -4.06,
+      "change_pct": -1.19,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "ZS",
+      "price": 124.85,
+      "change": 0.47,
+      "change_pct": 0.38,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "COF",
+      "price": 201.53,
+      "change": 0.66,
+      "change_pct": 0.33,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "BMY",
+      "price": 54.0,
+      "change": -1.28,
+      "change_pct": -2.32,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "SCOR",
+      "price": 7.95,
+      "change": 0.7,
+      "change_pct": 9.66,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "NICE",
+      "price": 84.68,
+      "change": 1.53,
+      "change_pct": 1.84,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "PINS",
+      "price": 20.27,
+      "change": -0.09,
+      "change_pct": -0.44,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CPB",
+      "price": 21.15,
+      "change": 0.04,
+      "change_pct": 0.19,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "FTV",
+      "price": 61.03,
+      "change": 0.35,
+      "change_pct": 0.58,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "EW",
+      "price": 87.36,
+      "change": 0.68,
+      "change_pct": 0.78,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "KR",
+      "price": 56.61,
+      "change": -5.21,
+      "change_pct": -8.43,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "PAYX",
+      "price": 98.24,
+      "change": 0.66,
+      "change_pct": 0.68,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "XLY",
+      "price": 117.16,
+      "change": 1.67,
+      "change_pct": 1.45,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "RF",
+      "price": 28.62,
+      "change": -0.03,
+      "change_pct": -0.1,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "KLAC",
+      "price": 259.56,
+      "change": 20.83,
+      "change_pct": 8.73,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SFM",
+      "price": 80.49,
+      "change": 0.83,
+      "change_pct": 1.04,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "AGG",
+      "price": 98.9,
+      "change": 0.29,
+      "change_pct": 0.29,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "XLC",
+      "price": 109.45,
+      "change": 0.25,
+      "change_pct": 0.23,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ROP",
+      "price": 330.26,
+      "change": 0.29,
+      "change_pct": 0.09,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "KLIC",
+      "price": 121.87,
+      "change": 5.36,
+      "change_pct": 4.6,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "AEP",
+      "price": 127.69,
+      "change": -0.58,
+      "change_pct": -0.45,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "EOG",
+      "price": 129.98,
+      "change": -3.27,
+      "change_pct": -2.45,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "JPM",
+      "price": 325.22,
+      "change": -8.24,
+      "change_pct": -2.47,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "STLD",
+      "price": 249.91,
+      "change": -20.22,
+      "change_pct": -7.49,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "VEEV",
+      "price": 153.3,
+      "change": -1.55,
+      "change_pct": -1.0,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NI",
+      "price": 47.26,
+      "change": 0.49,
+      "change_pct": 1.05,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "ITW",
+      "price": 264.09,
+      "change": 1.98,
+      "change_pct": 0.76,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "XLE",
+      "price": 53.77,
+      "change": -0.9,
+      "change_pct": -1.65,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "GLD",
+      "price": 387.12,
+      "change": -1.48,
+      "change_pct": -0.38,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "UPS",
+      "price": 104.86,
+      "change": -0.27,
+      "change_pct": -0.26,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CRM",
+      "price": 151.78,
+      "change": -3.24,
+      "change_pct": -2.09,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "LDI",
+      "price": 1.17,
+      "change": 0.0,
+      "change_pct": 0.0,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "PRNT",
+      "price": 25.51,
+      "change": 0.53,
+      "change_pct": 2.12,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "UPST",
+      "price": 32.43,
+      "change": 1.97,
+      "change_pct": 6.47,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MAR",
+      "price": 396.2,
+      "change": 1.59,
+      "change_pct": 0.4,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "UEIC",
+      "price": 4.1,
+      "change": 0.1,
+      "change_pct": 2.5,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "CHRW",
+      "price": 185.04,
+      "change": -0.16,
+      "change_pct": -0.09,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ARKW",
+      "price": 146.63,
+      "change": 2.62,
+      "change_pct": 1.82,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "FHN",
+      "price": 24.81,
+      "change": 0.08,
+      "change_pct": 0.32,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "GD",
+      "price": 350.01,
+      "change": -12.82,
+      "change_pct": -3.53,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "STT",
+      "price": 168.31,
+      "change": -2.79,
+      "change_pct": -1.63,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "EWBC",
+      "price": 126.81,
+      "change": -0.45,
+      "change_pct": -0.35,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "CTAS",
+      "price": 170.85,
+      "change": 1.21,
+      "change_pct": 0.71,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "SNPS",
+      "price": 455.51,
+      "change": -6.23,
+      "change_pct": -1.35,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "SCHW",
+      "price": 91.7,
+      "change": -2.81,
+      "change_pct": -2.97,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "UDR",
+      "price": 37.56,
+      "change": -0.09,
+      "change_pct": -0.24,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "MRVL",
+      "price": 310.58,
+      "change": 21.04,
+      "change_pct": 7.27,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "NUE",
+      "price": 243.83,
+      "change": -8.77,
+      "change_pct": -3.47,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "ODFL",
+      "price": 221.04,
+      "change": 2.68,
+      "change_pct": 1.23,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "INCY",
+      "price": 98.22,
+      "change": -0.77,
+      "change_pct": -0.78,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "SHW",
+      "price": 320.79,
+      "change": 6.99,
+      "change_pct": 2.23,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "TWLO",
+      "price": 186.17,
+      "change": -1.94,
+      "change_pct": -1.03,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "DBO",
+      "price": 18.89,
+      "change": 0.1,
+      "change_pct": 0.53,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "AR",
+      "price": 33.22,
+      "change": -0.68,
+      "change_pct": -2.01,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "HLT",
+      "price": 348.84,
+      "change": -0.46,
+      "change_pct": -0.13,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "ACI",
+      "price": 13.45,
+      "change": -0.96,
+      "change_pct": -6.66,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "ARKK",
+      "price": 80.19,
+      "change": 1.7,
+      "change_pct": 2.17,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "ROK",
+      "price": 473.79,
+      "change": 15.1,
+      "change_pct": 3.29,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "MO",
+      "price": 69.12,
+      "change": 0.17,
+      "change_pct": 0.25,
+      "signal": "HOLD"
+    },
+    {
+      "symbol": "FAST",
+      "price": 45.89,
+      "change": 1.01,
+      "change_pct": 2.25,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "XLF",
+      "price": 53.57,
+      "change": -0.48,
+      "change_pct": -0.89,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "NTLA",
+      "price": 15.67,
+      "change": 0.47,
+      "change_pct": 3.09,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "SPY",
+      "price": 746.74,
+      "change": 5.78,
+      "change_pct": 0.78,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "JNJ",
+      "price": 228.39,
+      "change": -5.81,
+      "change_pct": -2.48,
+      "signal": "STRONG SELL"
+    },
+    {
+      "symbol": "SO",
+      "price": 93.09,
+      "change": 0.56,
+      "change_pct": 0.61,
+      "signal": "BUY"
+    },
+    {
+      "symbol": "INTU",
+      "price": 267.0,
+      "change": -2.08,
+      "change_pct": -0.77,
+      "signal": "SELL"
+    },
+    {
+      "symbol": "MU",
+      "price": 1133.99,
+      "change": 90.8,
+      "change_pct": 8.7,
+      "signal": "STRONG BUY"
+    },
+    {
+      "symbol": "LUV",
+      "price": 47.97,
+      "change": 1.31,
+      "change_pct": 2.81,
+      "signal": "STRONG BUY"
+    }
+  ]
+}
