@@ -587,7 +587,7 @@ function MarketData() {
 
       {/* Market summary cards */}
       <div style={s.grid4}>
-        {MOCK_MARKET.slice(0,4).map(m=>(
+        {MOCK_MARKET.map(m=>(
           <div key={m.name} style={s.statCard}>
             <div style={s.statLabel}>{m.name}</div>
             <div style={{...s.statVal, fontSize:22}}>{m.val}</div>

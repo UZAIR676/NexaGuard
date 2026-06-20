@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Query
+from routes.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
@@ -18,7 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(fraud_router)
-
+app.include_router(auth_router)  
 # Market endpoints
 @app.get("/api/market/summary")
 def market_summary():
@@ -35,7 +36,7 @@ def sectors():
 @app.get("/api/market/movers")
 def movers(market: str = "sp500", top: int = 10):
     symbols = NASDAQ_100 if market == "nasdaq" else SP500_TOP50
-    return get_market_movers(symbols, top_n=top)
+    return get_market_movers(tuple(symbols), top_n=top)
 
 @app.get("/api/market/crypto")
 def crypto():

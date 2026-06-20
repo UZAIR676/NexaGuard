@@ -2,8 +2,10 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import json
+from services.cache import ttl_cache
 
 # ─────────────────────────────────────────────
 # ALL USA MARKET SYMBOLS
@@ -36,11 +38,11 @@ SECTORS = {
 
 # Top 50 S&P 500 Stocks by Market Cap
 SP500_TOP50 = [
-    "AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","BRK-B","LLY","AVGO",
-    "JPM","TSLA","UNH","V","XOM","MA","JNJ","PG","COST","HD",
-    "MRK","ABBV","CVX","CRM","BAC","NFLX","AMD","PEP","KO","WMT",
-    "TMO","MCD","LIN","CSCO","ACN","ABT","PM","ADBE","TXN","DHR",
-    "NEE","WFC","AMGN","NKE","INTC","RTX","HON","UPS","IBM","GE"
+    "AAPL","MSFT","NVDA","AMZN","META","GOOGL","BRK-B","LLY","AVGO",
+    "JPM","TSLA","UNH","V","XOM","MA","JNJ","PG","HD",
+    "ABBV","CRM","BAC","NFLX","AMD","PEP","WMT",
+    "ACN","ABT","ADBE","TXN",
+    "WFC","AMGN","NKE","INTC","RTX","IBM"
 ]
 
 # NASDAQ 100 Focus Stocks
@@ -111,62 +113,71 @@ def get_quote(symbol: str) -> dict:
 
 
 def get_batch_quotes(symbols: list) -> list:
-    """Fetch multiple stocks at once — fast batch call"""
+    """Fetch multiple stocks at once — parallel, much faster than sequential"""
+    def fetch_one(sym):
+        try:
+            t = yf.Ticker(sym)
+            info = t.fast_info
+            price = info.last_price
+            prev = info.previous_close
+            if price and prev:
+                change = price - prev
+                change_pct = (change / prev) * 100
+                return {
+                    "symbol": sym,
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "signal": _signal(change_pct),
+                }
+        except Exception:
+            return None
+        return None
+
     try:
-        tickers = yf.Tickers(" ".join(symbols))
-        results = []
-        for sym in symbols:
-            try:
-                t    = tickers.tickers[sym]
-                info = t.fast_info
-                price = info.last_price
-                prev  = info.previous_close
-                if price and prev:
-                    change     = price - prev
-                    change_pct = (change / prev) * 100
-                    results.append({
-                        "symbol":     sym,
-                        "price":      round(price, 2),
-                        "change":     round(change, 2),
-                        "change_pct": round(change_pct, 2),
-                        "signal":     _signal(change_pct),
-                    })
-            except:
-                pass
-        return results
+        with ThreadPoolExecutor(max_workers=20) as pool:
+            results = list(pool.map(fetch_one, symbols))
+        return [r for r in results if r is not None]
     except Exception as e:
         return [{"error": str(e)}]
 
 
+@ttl_cache(seconds=45)
 def get_all_indices() -> list:
-    """All major USA indices live"""
-    results = []
-    for name, sym in INDICES.items():
-        q = get_quote(sym)
-        q["name"] = name
-        results.append(q)
+    """All major USA indices live — fetched in parallel, cached 20s"""
+    with ThreadPoolExecutor(max_workers=len(INDICES)) as pool:
+        futures = {name: pool.submit(get_quote, sym) for name, sym in INDICES.items()}
+        results = []
+        for name, fut in futures.items():
+            q = fut.result()
+            q["name"] = name
+            results.append(q)
     return results
 
 
+@ttl_cache(seconds=45)
 def get_all_sectors() -> list:
-    """All 11 S&P 500 sectors performance"""
-    results = []
-    for name, sym in SECTORS.items():
-        q = get_quote(sym)
-        q["sector"] = name
-        results.append(q)
+    """All 11 S&P 500 sectors performance — fetched in parallel, cached 20s"""
+    with ThreadPoolExecutor(max_workers=len(SECTORS)) as pool:
+        futures = {name: pool.submit(get_quote, sym) for name, sym in SECTORS.items()}
+        results = []
+        for name, fut in futures.items():
+            q = fut.result()
+            q["sector"] = name
+            results.append(q)
     return results
 
 
-def get_market_movers(symbols: list = None, top_n: int = 10) -> dict:
+@ttl_cache(seconds=45)
+def get_market_movers(symbols: tuple = None, top_n: int = 10) -> dict:
     """
     Top gainers and losers from given list.
     Default = SP500 top 50
     """
     if not symbols:
-        symbols = SP500_TOP50
+        symbols = tuple(SP500_TOP50)
 
-    quotes = get_batch_quotes(symbols)
+    quotes = get_batch_quotes(list(symbols))
     valid  = [q for q in quotes if "error" not in q]
 
     sorted_all = sorted(valid, key=lambda x: x["change_pct"], reverse=True)
@@ -262,6 +273,7 @@ def get_etf_overview() -> list:
     return results
 
 
+@ttl_cache(seconds=45)
 def get_market_summary() -> dict:
     """
     Complete USA market snapshot:

@@ -5,6 +5,7 @@ NexaGuard — Fraud Detection API Route
 from fastapi import APIRouter
 from pydantic import BaseModel
 from services.fraud_detection import predict_fraud
+from services.transaction_log import log_transaction, get_stats, get_recent, get_alerts
 
 router = APIRouter()
 
@@ -12,6 +13,7 @@ router = APIRouter()
 class Transaction(BaseModel):
     time:   float = 0.0
     amount: float = 0.0
+    merchant: str = "API Transaction"
     v1:  float = 0.0;  v2:  float = 0.0;  v3:  float = 0.0
     v4:  float = 0.0;  v5:  float = 0.0;  v6:  float = 0.0
     v7:  float = 0.0;  v8:  float = 0.0;  v9:  float = 0.0
@@ -26,7 +28,19 @@ class Transaction(BaseModel):
 
 @router.post("/api/fraud/detect")
 def detect_fraud(tx: Transaction):
-    return predict_fraud(tx.dict())
+    payload = tx.dict()
+    merchant = payload.pop("merchant", "API Transaction")
+    result = predict_fraud(payload)
+
+    # Log every check so dashboard stats/recent/alerts are real, not mock
+    log_transaction(
+        amount=result["amount"],
+        fraud_score=result["fraud_score"],
+        risk_level=result["risk_level"],
+        is_fraud=result["is_fraud"],
+        merchant=merchant,
+    )
+    return result
 
 
 @router.get("/api/fraud/test")
@@ -46,3 +60,21 @@ def test_fraud():
         "v28": 0.1
     }
     return predict_fraud(suspicious)
+
+
+@router.get("/api/fraud/stats")
+def fraud_stats():
+    """Real aggregate stats for the dashboard (replaces mock numbers)"""
+    return get_stats()
+
+
+@router.get("/api/fraud/recent")
+def fraud_recent(limit: int = 10):
+    """Most recent logged transactions (replaces MOCK_RECENT)"""
+    return get_recent(limit)
+
+
+@router.get("/api/fraud/alerts")
+def fraud_alerts(limit: int = 10):
+    """Recent medium/high risk events (replaces MOCK_ALERTS)"""
+    return get_alerts(limit)
