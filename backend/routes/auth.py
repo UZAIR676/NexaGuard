@@ -1,144 +1,179 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-import psycopg2
-import hashlib
-import os
-import secrets
-from dotenv import load_dotenv
-
-load_dotenv()
+import sqlite3, hashlib, os, secrets
+from schemas import SignupIn, LoginIn, UpdateIn, RoleUpdateIn, TransactionIn
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+DB = os.path.join(os.path.dirname(__file__), "..", "nexaguard.db")
 
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-
-def get_connection():
-    return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-    )
-
-
+# ── DB Setup ───────────────────────────────────────────────────────────────
 def init_db():
-    con = get_connection()
-    cur = con.cursor()
-    cur.execute("""
+    con = sqlite3.connect(DB)
+    con.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id       SERIAL PRIMARY KEY,
-            name     TEXT NOT NULL,
-            email    TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            token    TEXT
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL,
+            email      TEXT    UNIQUE NOT NULL,
+            password   TEXT    NOT NULL,
+            token      TEXT,
+            role       TEXT    DEFAULT 'user',
+            balance    REAL    DEFAULT 10000.00,
+            created_at TEXT    DEFAULT (datetime('now'))
         )
     """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            type        TEXT    NOT NULL,
+            amount      REAL    NOT NULL,
+            to_email    TEXT,
+            description TEXT,
+            status      TEXT    DEFAULT 'completed',
+            fraud_score REAL    DEFAULT 0,
+            created_at  TEXT    DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    existing = con.execute("SELECT id FROM users WHERE email='admin@nexaguard.ai'").fetchone()
+    if not existing:
+        con.execute(
+            "INSERT INTO users (name, email, password, role, balance) VALUES (?,?,?,?,?)",
+            ("Admin", "admin@nexaguard.ai", hashlib.sha256("admin123".encode()).hexdigest(), "admin", 999999.00)
+        )
     con.commit()
-    cur.close()
     con.close()
-
 
 init_db()
 
+def hash_pw(pw):  return hashlib.sha256(pw.encode()).hexdigest()
+def get_db():     return sqlite3.connect(DB)
 
-def hash_pw(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
+def get_user_by_token(token):
+    con = get_db()
+    row = con.execute("SELECT id,name,email,role,balance FROM users WHERE token=?", (token,)).fetchone()
+    con.close()
+    if not row: raise HTTPException(401, "Invalid token")
+    return {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "balance": row[4]}
 
-
-# --- Schemas ---
-class SignupIn(BaseModel):
-    name: str
-    email: str
-    password: str
-
-
-class LoginIn(BaseModel):
-    email: str
-    password: str
-
-
-# --- Routes ---
+# ── Auth ───────────────────────────────────────────────────────────────────
 @router.post("/signup")
 def signup(body: SignupIn):
-    con = get_connection()
-    cur = con.cursor()
+    con = get_db()
     try:
         token = secrets.token_hex(32)
-        cur.execute(
-            "INSERT INTO users (name, email, password, token) VALUES (%s, %s, %s, %s)",
-            (body.name.strip(), body.email.lower().strip(), hash_pw(body.password), token)
+        con.execute(
+            "INSERT INTO users (name, email, password, token, role) VALUES (?,?,?,?,?)",
+            (body.name.strip(), body.email.lower().strip(), hash_pw(body.password), token, "user")
         )
         con.commit()
-        cur.execute("SELECT id, name, email FROM users WHERE email=%s", (body.email.lower(),))
-        row = cur.fetchone()
-        return {"token": token, "user": {"id": row[0], "name": row[1], "email": row[2]}}
-    except psycopg2.errors.UniqueViolation:
-        con.rollback()
+        row = con.execute("SELECT id,name,email,role,balance FROM users WHERE email=?", (body.email.lower(),)).fetchone()
+        return {"token": token, "user": {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "balance": row[4]}}
+    except sqlite3.IntegrityError:
         raise HTTPException(400, "Email already registered")
     finally:
-        cur.close()
         con.close()
-
 
 @router.post("/login")
 def login(body: LoginIn):
-    con = get_connection()
-    cur = con.cursor()
+    con = get_db()
     try:
-        cur.execute(
-            "SELECT id, name, email, password FROM users WHERE email=%s",
-            (body.email.lower().strip(),)
-        )
-        row = cur.fetchone()
+        row = con.execute("SELECT id,name,email,password,role,balance FROM users WHERE email=?", (body.email.lower().strip(),)).fetchone()
         if not row or row[3] != hash_pw(body.password):
             raise HTTPException(401, "Invalid email or password")
         token = secrets.token_hex(32)
-        cur.execute("UPDATE users SET token=%s WHERE id=%s", (token, row[0]))
+        con.execute("UPDATE users SET token=? WHERE id=?", (token, row[0]))
         con.commit()
-        return {"token": token, "user": {"id": row[0], "name": row[1], "email": row[2]}}
+        return {"token": token, "user": {"id": row[0], "name": row[1], "email": row[2], "role": row[4], "balance": row[5]}}
     finally:
-        cur.close()
         con.close()
-
 
 @router.get("/me")
 def me(token: str):
-    con = get_connection()
-    cur = con.cursor()
-    try:
-        cur.execute("SELECT id, name, email FROM users WHERE token=%s", (token,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(401, "Invalid token")
-        return {"id": row[0], "name": row[1], "email": row[2]}
-    finally:
-        cur.close()
-        con.close()
-
-
-class UpdateIn(BaseModel):
-    token: str
-    name: str
-
+    return get_user_by_token(token)
 
 @router.post("/update")
 def update_profile(body: UpdateIn):
-    con = get_connection()
-    cur = con.cursor()
+    con = get_db()
     try:
-        cur.execute("SELECT id FROM users WHERE token=%s", (body.token,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(401, "Invalid token")
-        cur.execute("UPDATE users SET name=%s WHERE id=%s", (body.name.strip(), row[0]))
+        row = con.execute("SELECT id FROM users WHERE token=?", (body.token,)).fetchone()
+        if not row: raise HTTPException(401, "Invalid token")
+        con.execute("UPDATE users SET name=? WHERE id=?", (body.name.strip(), row[0]))
         con.commit()
         return {"success": True, "name": body.name.strip()}
     finally:
-        cur.close()
         con.close()
+
+# ── Admin ──────────────────────────────────────────────────────────────────
+@router.get("/admin/users")
+def get_all_users(token: str):
+    user = get_user_by_token(token)
+    if user["role"] not in ["admin", "analyst"]:
+        raise HTTPException(403, "Access denied")
+    con = get_db()
+    rows = con.execute("SELECT id,name,email,role,balance,created_at FROM users").fetchall()
+    con.close()
+    return [{"id": r[0], "name": r[1], "email": r[2], "role": r[3], "balance": r[4], "created_at": r[5]} for r in rows]
+
+@router.post("/admin/role")
+def update_role(body: RoleUpdateIn):
+    user = get_user_by_token(body.token)
+    if user["role"] != "admin":
+        raise HTTPException(403, "Only admin can change roles")
+    if body.role not in ["user", "analyst", "admin"]:
+        raise HTTPException(400, "Invalid role")
+    con = get_db()
+    con.execute("UPDATE users SET role=? WHERE id=?", (body.role, body.user_id))
+    con.commit()
+    con.close()
+    return {"success": True}
+
+# ── Transactions ───────────────────────────────────────────────────────────
+@router.post("/transaction")
+def make_transaction(body: TransactionIn):
+    user = get_user_by_token(body.token)
+    con = get_db()
+    try:
+        if body.fraud_score > 70:
+            con.execute(
+                "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score) VALUES (?,?,?,?,?,?,?)",
+                (user["id"], body.type, body.amount, body.to_email, body.description, "blocked", body.fraud_score)
+            )
+            con.commit()
+            return {"success": False, "status": "blocked", "reason": "High fraud risk detected"}
+
+        if body.type in ["send", "withdraw"]:
+            if user["balance"] < body.amount:
+                raise HTTPException(400, "Insufficient balance")
+            con.execute("UPDATE users SET balance=balance-? WHERE id=?", (body.amount, user["id"]))
+            if body.type == "send" and body.to_email:
+                con.execute("UPDATE users SET balance=balance+? WHERE email=?", (body.amount, body.to_email.lower()))
+        elif body.type in ["receive", "deposit"]:
+            con.execute("UPDATE users SET balance=balance+? WHERE id=?", (body.amount, user["id"]))
+
+        con.execute(
+            "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score) VALUES (?,?,?,?,?,?,?)",
+            (user["id"], body.type, body.amount, body.to_email, body.description, "completed", body.fraud_score)
+        )
+        con.commit()
+        new_balance = con.execute("SELECT balance FROM users WHERE id=?", (user["id"],)).fetchone()[0]
+        return {"success": True, "status": "completed", "new_balance": round(new_balance, 2)}
+    finally:
+        con.close()
+
+@router.get("/transactions")
+def get_transactions(token: str):
+    user = get_user_by_token(token)
+    con = get_db()
+    if user["role"] in ["admin", "analyst"]:
+        rows = con.execute("""
+            SELECT t.id,u.name,u.email,t.type,t.amount,t.to_email,t.description,t.status,t.fraud_score,t.created_at
+            FROM transactions t JOIN users u ON t.user_id=u.id
+            ORDER BY t.created_at DESC LIMIT 100
+        """).fetchall()
+        return [{"id":r[0],"user":r[1],"email":r[2],"type":r[3],"amount":r[4],"to_email":r[5],"description":r[6],"status":r[7],"fraud_score":r[8],"created_at":r[9]} for r in rows]
+    else:
+        rows = con.execute("""
+            SELECT id,type,amount,to_email,description,status,fraud_score,created_at
+            FROM transactions WHERE user_id=? ORDER BY created_at DESC LIMIT 50
+        """, (user["id"],)).fetchall()
+        return [{"id":r[0],"type":r[1],"amount":r[2],"to_email":r[3],"description":r[4],"status":r[5],"fraud_score":r[6],"created_at":r[7]} for r in rows]

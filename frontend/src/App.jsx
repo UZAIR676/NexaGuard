@@ -8,27 +8,35 @@ import FraudDetection from "./pages/FraudDetection";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import AdminPanel from "./pages/AdminPanel";
 
-function Nav({ user, page, setPage, onLogout }) {
-  const pages = ["Dashboard", "Fraud Detection", "Market Data", "Alerts", "Settings"];
+function Nav({ user, page, setPage }) {
+  const basePages = ["Dashboard", "Fraud Detection", "Market Data", "Alerts", "Settings"];
+  const adminPages = user.role === "admin" ? ["Admin Panel"] : [];
+  const analystPages = user.role === "analyst" ? ["Admin Panel"] : [];
+  const allPages = [...basePages, ...adminPages, ...analystPages];
+
+  const roleColor =
+    user.role === "admin"   ? T.red   :
+    user.role === "analyst" ? T.amber : T.accent;
+
   return (
     <div style={s.nav}>
       <div style={s.navLogo}>
         <div style={{ ...s.logoIcon, width: 28, height: 28, fontSize: 14 }}>🛡️</div>
         <span style={{ ...s.logoText, fontSize: 16 }}>NexaGuard</span>
       </div>
-      {pages.map(p => (
+      {allPages.map(p => (
         <button key={p} style={{ ...s.navItem, ...(page === p ? s.navItemActive : {}) }} onClick={() => setPage(p)}>
-          {p}
+          {p === "Admin Panel" ? "👑 Admin Panel" : p}
         </button>
       ))}
       <div style={s.navRight}>
+        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: `${roleColor}22`, color: roleColor, fontWeight: 600 }}>
+          {user.role?.toUpperCase()}
+        </span>
         <div style={{ fontSize: 12, color: T.muted }}>{user.email}</div>
-        <div
-          style={{ ...s.avatar, position: "relative" }}
-          title="Profile"
-          onClick={() => setPage("Profile")}
-        >
+        <div style={{ ...s.avatar, cursor: "pointer" }} title="Profile" onClick={() => setPage("Profile")}>
           {user.name[0].toUpperCase()}
         </div>
       </div>
@@ -37,12 +45,11 @@ function Nav({ user, page, setPage, onLogout }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [authPage, setAuthPage] = useState("login");
-  const [page, setPage] = useState("Dashboard");
+  const [page, setPage]       = useState("Dashboard");
   const [loading, setLoading] = useState(true);
 
-  // Auto-login: token check on refresh
   useEffect(() => {
     const token = localStorage.getItem("ng_token");
     if (token) {
@@ -89,13 +96,14 @@ export default function App() {
     "Alerts":          <Alerts />,
     "Settings":        <Settings user={user} />,
     "Profile":         <Profile user={user} onLogout={handleLogout} onUpdate={setUser} />,
+    "Admin Panel":     <AdminPanel user={user} />,
   };
 
   return (
     <div style={s.app}>
-      <Nav user={user} page={page} setPage={setPage} onLogout={handleLogout} />
+      <Nav user={user} page={page} setPage={setPage} />
       <div style={s.main}>
-        {pages[page]}
+        {pages[page] || <Dashboard />}
       </div>
     </div>
   );
