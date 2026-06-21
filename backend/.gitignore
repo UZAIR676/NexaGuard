@@ -49,4 +49,4 @@ yarn.lock
 pnpm-lock.yaml
 
 # TypeScript
-*.tsbuildinfo
+*.tsbuildinfobackend/.env 
