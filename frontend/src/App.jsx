@@ -9,12 +9,12 @@ import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import AdminPanel from "./pages/AdminPanel";
-
+import Banking from "./pages/Banking";
+import AIAdvisor from "./pages/AIAdvisor";
 function Nav({ user, page, setPage }) {
-  const basePages = ["Dashboard", "Fraud Detection", "Market Data", "Alerts", "Settings"];
-  const adminPages = user.role === "admin" ? ["Admin Panel"] : [];
-  const analystPages = user.role === "analyst" ? ["Admin Panel"] : [];
-  const allPages = [...basePages, ...adminPages, ...analystPages];
+const basePages = ["Dashboard", "Banking", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
+  const extraPages = (user.role === "admin" || user.role === "analyst") ? ["Admin Panel"] : [];
+  const allPages = [...basePages, ...extraPages];
 
   const roleColor =
     user.role === "admin"   ? T.red   :
@@ -28,7 +28,7 @@ function Nav({ user, page, setPage }) {
       </div>
       {allPages.map(p => (
         <button key={p} style={{ ...s.navItem, ...(page === p ? s.navItemActive : {}) }} onClick={() => setPage(p)}>
-          {p === "Admin Panel" ? "👑 Admin Panel" : p}
+          {p === "Admin Panel" ? "👑 Admin" : p === "Banking" ? "🏦 Banking" : p}
         </button>
       ))}
       <div style={s.navRight}>
@@ -45,10 +45,10 @@ function Nav({ user, page, setPage }) {
 }
 
 export default function App() {
-  const [user, setUser]       = useState(null);
+  const [user, setUser]         = useState(null);
   const [authPage, setAuthPage] = useState("login");
-  const [page, setPage]       = useState("Dashboard");
-  const [loading, setLoading] = useState(true);
+  const [page, setPage]         = useState("Dashboard");
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("ng_token");
@@ -73,6 +73,10 @@ export default function App() {
     setPage("Dashboard");
   };
 
+  const handleBalanceUpdate = (newBalance) => {
+    setUser(u => ({ ...u, balance: newBalance }));
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted, fontFamily: T.font }}>
@@ -91,10 +95,12 @@ export default function App() {
 
   const pages = {
     "Dashboard":       <Dashboard />,
+    "Banking":         <Banking user={user} onBalanceUpdate={handleBalanceUpdate} />,
     "Fraud Detection": <FraudDetection />,
     "Market Data":     <MarketData />,
     "Alerts":          <Alerts />,
     "Settings":        <Settings user={user} />,
+    "AI Advisor": <AIAdvisor user={user} />,
     "Profile":         <Profile user={user} onLogout={handleLogout} onUpdate={setUser} />,
     "Admin Panel":     <AdminPanel user={user} />,
   };
@@ -104,6 +110,7 @@ export default function App() {
       <Nav user={user} page={page} setPage={setPage} />
       <div style={s.main}>
         {pages[page] || <Dashboard />}
+        
       </div>
     </div>
   );
