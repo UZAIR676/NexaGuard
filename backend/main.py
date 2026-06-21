@@ -2,7 +2,6 @@ from fastapi import FastAPI, Query
 from routes.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from routes.ai_advisor import router as ai_router
-from services.technical_indicators import router as technical_router
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
     get_all_sectors, get_market_movers, get_stock_history,
@@ -10,6 +9,7 @@ from services.market_data import (
     get_market_summary, search_stock, SP500_TOP50, NASDAQ_100
 )
 from routes.fraud import router as fraud_router
+from services.technical_indicators import router as technical_router
 
 app = FastAPI(title="NexaGuard API", version="1.0.0")
 

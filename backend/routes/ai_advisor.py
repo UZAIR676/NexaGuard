@@ -5,6 +5,7 @@ import requests
 import json
 
 from services.market_data import get_quote, get_batch_quotes, SP500_TOP50
+from services.technical_indicators import analyze_stock
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -36,29 +37,21 @@ SECTOR_MAP = {
     "social":        ["META", "SNAP"],
     "streaming":     ["NFLX", "SPOT", "ROKU"],
     "ai":            ["NVDA", "MSFT", "GOOGL", "AMD", "PLTR"],
-    "amazon":    ["AMZN"],
-    "apple":     ["AAPL"],
-    "microsoft": ["MSFT"],
-    "google":    ["GOOGL"],
-    "alphabet":  ["GOOGL"],
-    "tesla":     ["TSLA"],
-    "nvidia":    ["NVDA"],
-    "meta":      ["META"],
-    "netflix":   ["NFLX"],
-    "intel":     ["INTC"],
-    "qualcomm":  ["QCOM"],
-    "broadcom":  ["AVGO"],
-    "walmart":   ["WMT"],
-    "jpmorgan":  ["JPM"],
-    "goldman":   ["GS"],
-    "palantir":  ["PLTR"],
+    "amazon":    ["AMZN"],  "apple":    ["AAPL"],
+    "microsoft": ["MSFT"],  "google":   ["GOOGL"],
+    "alphabet":  ["GOOGL"], "tesla":    ["TSLA"],
+    "nvidia":    ["NVDA"],  "meta":     ["META"],
+    "netflix":   ["NFLX"],  "intel":    ["INTC"],
+    "qualcomm":  ["QCOM"],  "broadcom": ["AVGO"],
+    "walmart":   ["WMT"],   "jpmorgan": ["JPM"],
+    "goldman":   ["GS"],    "palantir": ["PLTR"],
 }
 
 KNOWN_SYMBOLS = set(SP500_TOP50 + [
-    "GOOG", "NFLX", "CRM", "ORCL", "ADBE", "PYPL", "SHOP",
-    "GS", "V", "MA", "CVX", "PFE", "WMT", "COST", "DIS",
-    "UBER", "LYFT", "SNAP", "SPOT", "SQ", "ROKU",
-    "PLTR", "COIN", "HOOD", "SOFI", "NIO", "BABA", "JD", "PDD", "BIDU",
+    "GOOG","NFLX","CRM","ORCL","ADBE","PYPL","SHOP",
+    "GS","V","MA","CVX","PFE","WMT","COST","DIS",
+    "UBER","LYFT","SNAP","SPOT","SQ","ROKU",
+    "PLTR","COIN","HOOD","SOFI","NIO","BABA","JD","PDD","BIDU",
 ])
 
 def extract_symbols(text: str) -> list:
@@ -71,68 +64,63 @@ def extract_symbols(text: str) -> list:
     for keyword, stocks in SECTOR_MAP.items():
         if keyword in text_lower:
             symbols.update(stocks)
-    return list(symbols)[:5]
+    return list(symbols)[:3]
 
-def build_stock_context(symbols: list) -> str:
+def build_context(symbols: list) -> str:
     if not symbols:
         return ""
-    lines = []
+
+    blocks = []
     quotes = get_batch_quotes(symbols)
-    for q in quotes:
-        if "error" in q:
-            continue
-        sym = q.get("symbol", "")
-        price = q.get("price", "N/A")
-        change_pct = q.get("change_pct", 0)
-        change = q.get("change", 0)
-        signal = q.get("signal", "")
-        direction = "UP ▲" if change_pct >= 0 else "DOWN ▼"
+    quote_map = {q["symbol"]: q for q in quotes if "error" not in q}
 
-        full = get_quote(sym)
-        high52 = full.get("52w_high", "N/A")
-        low52  = full.get("52w_low", "N/A")
-        mktcap = full.get("market_cap")
-        cap_str = f"${mktcap/1e9:.1f}B" if mktcap else "N/A"
+    for sym in symbols:
+        q = quote_map.get(sym, {})
+        full      = get_quote(sym)
+        price     = q.get("price", "N/A")
+        chg       = q.get("change_pct", 0)
+        direction = "UP ▲" if chg >= 0 else "DOWN ▼"
+        high52    = full.get("52w_high", "N/A")
+        low52     = full.get("52w_low", "N/A")
+        mktcap    = full.get("market_cap")
+        cap_str   = f"${mktcap/1e9:.1f}B" if mktcap else "N/A"
 
-        # How far from 52W high/low (useful for buy/sell decision)
-        try:
-            from_high = round(((price - high52) / high52) * 100, 1)
-            from_low  = round(((price - low52)  / low52)  * 100, 1)
-            position  = f"{from_high}% from 52W high | +{from_low}% from 52W low"
-        except:
-            position = ""
+        tech = analyze_stock(sym)
+        tech_summary = tech.get("summary", "Technical data unavailable")
 
-        lines.append(
+        block = (
             f"  {sym}:\n"
-            f"    Current Price : ${price}\n"
-            f"    Today         : {direction} {abs(change_pct)}% (${change})\n"
-            f"    52W Range     : ${low52} – ${high52}\n"
-            f"    Position      : {position}\n"
-            f"    Market Cap    : {cap_str}\n"
-            f"    NexaGuard Signal: {signal}"
+            f"    Price     : ${price} | Today: {direction} {abs(chg)}%\n"
+            f"    52W Range : ${low52} – ${high52} | Market Cap: {cap_str}\n"
+            f"{tech_summary}"
         )
-    return "\n".join(lines)
+        blocks.append(block)
 
-# ── System Prompt ──────────────────────────────────────────────────────────
-SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor. You speak in the same language the user writes in (Urdu, English, or mix).
+    return "\n\n".join(blocks)
+
+
+SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor backed by real ML-powered technical analysis.
 
 == CRITICAL RULES ==
-1. When "=== LIVE MARKET DATA ===" is in the message, ALWAYS start your reply with the exact current price. Example: "AMZN abhi $244.39 pe trade ho raha hai, aaj +2.08% upar hai."
-2. Use ONLY the numbers from the LIVE DATA block — never invent prices.
-3. If NO live data exists, say so clearly and give general analysis only.
+1. When "=== LIVE MARKET DATA ===" appears, ALWAYS start your reply with the exact current price.
+2. Use ONLY the numbers provided — never invent prices.
+3. Reference the technical indicators (RSI, MACD, Bollinger, NexaGuard Score) in your answer.
+4. If NO live data exists, say so clearly.
 
-== RESPONSE STRUCTURE (follow this order) ==
+== RESPONSE STRUCTURE ==
 📍 Current price + today's movement
-📊 52W position — near high or low? What does it mean?
-🎯 BUY / HOLD / SELL — clear signal with 2-3 sentence reasoning
-⚡ Key risk or opportunity to watch
-🧠 NexaGuard sees the data — you make the move.
+📊 Key technical signals (RSI, MACD, trend)
+🎯 BUY / HOLD / SELL — clear signal with reasoning
+⚡ Key risk or opportunity
+🛡️ Powered by NexaGuard Intelligence — invest with data, not emotion.
 
-Keep response under 220 words. Use emojis. Be direct and confident."""
+Max 220 words. Be direct. Match user's language (Urdu/English/mix)."""
+
 
 class ChatIn(BaseModel):
     message: str
     session_id: str = "default"
+
 
 def stream_ollama(messages: list, history: list, original_msg: str):
     full_reply = ""
@@ -140,8 +128,7 @@ def stream_ollama(messages: list, history: list, original_msg: str):
         res = requests.post(
             OLLAMA_URL,
             json={"model": MODEL, "messages": messages, "stream": True},
-            stream=True,
-            timeout=120,
+            stream=True, timeout=120,
         )
         for line in res.iter_lines():
             if not line:
@@ -161,24 +148,25 @@ def stream_ollama(messages: list, history: list, original_msg: str):
             history.append({"role": "assistant", "text": full_reply})
         yield f"data: {json.dumps({'done': True})}\n\n"
 
+
 @router.post("/chat")
 def ai_chat(body: ChatIn):
     history = get_history(body.session_id)
     symbols = extract_symbols(body.message)
-    stock_context = build_stock_context(symbols)
+    context = build_context(symbols)
 
-    if stock_context:
+    if context:
         user_msg = (
             f"{body.message}\n\n"
-            f"=== LIVE MARKET DATA ===\n"
-            f"{stock_context}\n"
+            f"=== LIVE MARKET DATA + TECHNICAL ANALYSIS ===\n"
+            f"{context}\n"
             f"=== END ===\n\n"
-            f"Answer in the same language as the user's question. Quote exact prices from live data."
+            f"Answer using exact prices and technical signals above. Match user's language."
         )
     else:
         user_msg = (
             f"{body.message}\n\n"
-            f"[NO LIVE DATA — tell user and give general analysis only]"
+            f"[NO LIVE DATA — inform user and give general analysis only]"
         )
 
     messages = [{"role": "system", "content": SYSTEM}]
@@ -191,6 +179,7 @@ def ai_chat(body: ChatIn):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
 
 @router.delete("/chat/{session_id}")
 def clear_chat(session_id: str):
