@@ -96,28 +96,45 @@ def calculate_support_resistance(prices: pd.Series):
 def calculate_technical_score(rsi, macd, bollinger, ma, volume) -> dict:
     score = 50
 
-    if rsi < 30:    score += 20
-    elif rsi < 45:  score += 10
-    elif rsi > 70:  score -= 20
-    elif rsi > 55:  score -= 10
+    # RSI — weighted by how extreme it is
+    if rsi < 30:         score += 20   # strongly oversold = strong buy
+    elif rsi < 40:       score += 12
+    elif rsi < 45:       score += 5
+    elif rsi > 70:       score -= 20   # strongly overbought = sell
+    elif rsi > 60:       score -= 12
+    elif rsi > 55:       score -= 5
 
-    if macd["crossover"] == "bullish":    score += 15
-    else:                                  score -= 15
+    # MACD — crossover + histogram magnitude
+    hist = macd["histogram"]
+    if macd["crossover"] == "bullish":
+        score += 15 if abs(hist) > 1.0 else 8    # strong vs weak bullish
+    else:
+        score -= 15 if abs(hist) > 1.0 else 8    # strong vs weak bearish
 
-    if bollinger["signal"] == "oversold":    score += 10
-    elif bollinger["signal"] == "overbought": score -= 10
+    # Bollinger
+    if bollinger["signal"] == "oversold":      score += 10
+    elif bollinger["signal"] == "overbought":  score -= 10
+    # pct_b refinement
+    pct_b = bollinger["pct_b"]
+    if pct_b < 0.2:   score += 5    # near lower band
+    elif pct_b > 0.8: score -= 5    # near upper band
 
+    # Moving averages trend
     if ma["trend"] == "bullish":  score += 15
     else:                          score -= 15
 
+    # Price vs SMA200 (long-term health)
+    # (sma_200 already in ma dict)
+    # Volume confirmation
     if volume["signal"] == "high" and volume["obv_trend"] == "up":    score += 10
     elif volume["signal"] == "high" and volume["obv_trend"] == "down": score -= 10
+    elif volume["signal"] == "low":                                     score -= 3
 
     score = max(0, min(100, score))
 
     if score >= 70:   signal = "STRONG BUY"
-    elif score >= 55: signal = "BUY"
-    elif score >= 45: signal = "HOLD"
+    elif score >= 58: signal = "BUY"
+    elif score >= 43: signal = "HOLD"
     elif score >= 30: signal = "SELL"
     else:             signal = "STRONG SELL"
 
