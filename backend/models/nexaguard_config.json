@@ -1,0 +1,29 @@
+{
+  "model_type": "xgboost",
+  "features": [
+    "Returns",
+    "HL_ratio",
+    "OC_ratio",
+    "SMA_10",
+    "SMA_20",
+    "SMA_50",
+    "EMA_12",
+    "EMA_26",
+    "MACD",
+    "MACD_signal",
+    "MACD_hist",
+    "RSI",
+    "BB_pct",
+    "Vol_ratio",
+    "ATR",
+    "Momentum"
+  ],
+  "seq_len": 60,
+  "metrics": {
+    "accuracy": 0.533588203167668,
+    "precision": 0.49380530973451325,
+    "recall": 0.3293978748524203,
+    "f1": 0.3951841359773371
+  },
+  "trained_at": "20260621_1705"
+}

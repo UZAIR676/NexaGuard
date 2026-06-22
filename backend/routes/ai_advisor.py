@@ -75,7 +75,7 @@ def build_context(symbols: list) -> str:
     quote_map = {q["symbol"]: q for q in quotes if "error" not in q}
 
     for sym in symbols:
-        q = quote_map.get(sym, {})
+        q         = quote_map.get(sym, {})
         full      = get_quote(sym)
         price     = q.get("price", "N/A")
         chg       = q.get("change_pct", 0)
@@ -85,14 +85,37 @@ def build_context(symbols: list) -> str:
         mktcap    = full.get("market_cap")
         cap_str   = f"${mktcap/1e9:.1f}B" if mktcap else "N/A"
 
-        tech = analyze_stock(sym)
-        tech_summary = tech.get("summary", "Technical data unavailable")
+        # Technical Analysis
+        tech         = analyze_stock(sym)
+        tech_sum     = tech.get("summary_dict", {})
+        tech_score   = tech_sum.get("score", "N/A") if isinstance(tech_sum, dict) else "N/A"
+        tech_signal  = tech_sum.get("signal", "N/A") if isinstance(tech_sum, dict) else "N/A"
+        tech_trend   = tech_sum.get("trend", "N/A")  if isinstance(tech_sum, dict) else "N/A"
+        rsi          = tech.get("rsi", "N/A")
+        macd         = tech.get("macd", {}).get("crossover", "N/A") if isinstance(tech.get("macd"), dict) else "N/A"
+
+        # ML Prediction
+        try:
+            ml_res = requests.get(
+                f"http://localhost:8000/api/ml/predict/{sym}", timeout=5
+            ).json()
+            if "signal" in ml_res:
+                ml_line = (
+                    f"    ML Signal  : {ml_res['signal']} "
+                    f"(UP: {ml_res['up_prob']}% | Confidence: {ml_res['confidence']})"
+                )
+            else:
+                ml_line = "    ML Signal  : Not available"
+        except:
+            ml_line = "    ML Signal  : Not available"
 
         block = (
             f"  {sym}:\n"
-            f"    Price     : ${price} | Today: {direction} {abs(chg)}%\n"
-            f"    52W Range : ${low52} – ${high52} | Market Cap: {cap_str}\n"
-            f"{tech_summary}"
+            f"    Price      : ${price} | Today: {direction} {abs(chg)}%\n"
+            f"    52W Range  : ${low52} – ${high52} | Market Cap: {cap_str}\n"
+            f"    Tech Score : {tech_score}/100 | Signal: {tech_signal}\n"
+            f"    RSI        : {rsi} | MACD: {macd} | Trend: {tech_trend}\n"
+            f"{ml_line}"
         )
         blocks.append(block)
 
@@ -104,12 +127,13 @@ SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor back
 == CRITICAL RULES ==
 1. When "=== LIVE MARKET DATA ===" appears, ALWAYS start your reply with the exact current price.
 2. Use ONLY the numbers provided — never invent prices.
-3. Reference the technical indicators (RSI, MACD, Bollinger, NexaGuard Score) in your answer.
+3. Reference the technical indicators (RSI, MACD, Tech Score, ML Signal) in your answer.
 4. If NO live data exists, say so clearly.
 
 == RESPONSE STRUCTURE ==
 📍 Current price + today's movement
-📊 Key technical signals (RSI, MACD, trend)
+📊 Tech Score + RSI + MACD signal
+🤖 ML Prediction signal
 🎯 BUY / HOLD / SELL — clear signal with reasoning
 ⚡ Key risk or opportunity
 🛡️ Powered by NexaGuard Intelligence — invest with data, not emotion.
@@ -158,10 +182,10 @@ def ai_chat(body: ChatIn):
     if context:
         user_msg = (
             f"{body.message}\n\n"
-            f"=== LIVE MARKET DATA + TECHNICAL ANALYSIS ===\n"
+            f"=== LIVE MARKET DATA + TECHNICAL ANALYSIS + ML PREDICTION ===\n"
             f"{context}\n"
             f"=== END ===\n\n"
-            f"Answer using exact prices and technical signals above. Match user's language."
+            f"Answer using exact prices, technical signals and ML prediction above. Match user's language."
         )
     else:
         user_msg = (

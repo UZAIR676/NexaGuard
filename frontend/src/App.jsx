@@ -11,8 +11,9 @@ import Profile from "./pages/Profile";
 import AdminPanel from "./pages/AdminPanel";
 import Banking from "./pages/Banking";
 import AIAdvisor from "./pages/AIAdvisor";
+import CSVScanner from "./pages/CSVScanner";
 function Nav({ user, page, setPage }) {
-const basePages = ["Dashboard", "Banking", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
+const basePages = ["Dashboard", "Banking","CSV Scanner", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
   const extraPages = (user.role === "admin" || user.role === "analyst") ? ["Admin Panel"] : [];
   const allPages = [...basePages, ...extraPages];
 
@@ -101,6 +102,7 @@ export default function App() {
     "Alerts":          <Alerts />,
     "Settings":        <Settings user={user} />,
     "AI Advisor": <AIAdvisor user={user} />,
+    "CSV Scanner": <CSVScanner />,
     "Profile":         <Profile user={user} onLogout={handleLogout} onUpdate={setUser} />,
     "Admin Panel":     <AdminPanel user={user} />,
   };

@@ -2,6 +2,8 @@ from fastapi import FastAPI, Query
 from routes.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from routes.ai_advisor import router as ai_router
+from services.lstm_predictor import router as ml_router
+from routes.csv_scanner import router as csv_router
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
     get_all_sectors, get_market_movers, get_stock_history,
@@ -24,6 +26,8 @@ app.include_router(fraud_router)
 app.include_router(auth_router)  
 app.include_router(ai_router)
 app.include_router(technical_router)
+app.include_router(ml_router)
+app.include_router(csv_router)
 # Market endpoints
 @app.get("/api/market/summary")
 def market_summary():
