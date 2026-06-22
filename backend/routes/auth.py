@@ -273,3 +273,62 @@ def get_transactions(token: str):
             FROM transactions WHERE user_id=? ORDER BY created_at DESC LIMIT 50
         """, (user["id"],)).fetchall()
         return [{"id":r[0],"type":r[1],"amount":r[2],"to_email":r[3],"description":r[4],"status":r[5],"fraud_score":r[6],"created_at":r[7]} for r in rows]
+
+# ── Admin — Delete User ────────────────────────────────────────────────────
+class DeleteUserIn(BaseModel):
+    token: str
+    user_id: int
+
+@router.post("/admin/delete-user")
+def delete_user(body: DeleteUserIn):
+    admin = get_user_by_token(body.token)
+    if admin["role"] != "admin":
+        raise HTTPException(403, "Only admin can delete users")
+    if admin["id"] == body.user_id:
+        raise HTTPException(400, "Admin apna account delete nahi kar sakta")
+    con = get_db()
+    try:
+        row = con.execute("SELECT id, role FROM users WHERE id=?", (body.user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "User not found")
+        if row[1] == "admin":
+            raise HTTPException(400, "Admin user delete nahi ho sakta")
+        con.execute("DELETE FROM transactions WHERE user_id=?", (body.user_id,))
+        con.execute("DELETE FROM users WHERE id=?", (body.user_id,))
+        con.commit()
+        return {"success": True, "message": "User deleted successfully"}
+    finally:
+        con.close()
+
+# ── User — Update Profile ──────────────────────────────────────────────────
+class UpdateProfileIn(BaseModel):
+    token: str
+    name: str
+    current_password: str = ""
+    new_password: str = ""
+
+@router.post("/update-profile")
+def update_profile_full(body: UpdateProfileIn):
+    user = get_user_by_token(body.token)
+    con  = get_db()
+    try:
+        if not body.name.strip():
+            raise HTTPException(400, "Name cannot be empty")
+
+        # Password change request
+        if body.new_password:
+            if len(body.new_password) < 6:
+                raise HTTPException(400, "Password must be at least 6 characters")
+            row = con.execute("SELECT password FROM users WHERE id=?", (user["id"],)).fetchone()
+            if row[0] != hash_pw(body.current_password):
+                raise HTTPException(400, "Current password is incorrect")
+            con.execute("UPDATE users SET name=?, password=? WHERE id=?",
+                       (body.name.strip(), hash_pw(body.new_password), user["id"]))
+        else:
+            con.execute("UPDATE users SET name=? WHERE id=?", (body.name.strip(), user["id"]))
+
+        con.commit()
+        updated = con.execute("SELECT id,name,email,role,balance FROM users WHERE id=?", (user["id"],)).fetchone()
+        return {"success": True, "user": {"id": updated[0], "name": updated[1], "email": updated[2], "role": updated[3], "balance": updated[4]}}
+    finally:
+        con.close()

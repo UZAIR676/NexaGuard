@@ -1,1 +1,42 @@
-.env 
+# Environment variables - NEVER commit!
+.env
+.env.local
+
+# Database
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# ML Models (large files)
+*.pkl
+*.h5
+*.keras
+models/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Images in wrong place
+src/pages/*.png
+src/pages/*.jpg

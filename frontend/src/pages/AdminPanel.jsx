@@ -32,6 +32,25 @@ export default function AdminPanel({ user }) {
     } catch { }
   };
 
+  const deleteUser = async (userId, userName) => {
+    if (!window.confirm(`"${userName}" after deleting this user you cannot undo!`)) return;
+    setMsg("");
+    try {
+      const res  = await fetch(`${BASE}/api/auth/admin/delete-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✅ User deleted successfully`);
+        loadUsers();
+      } else {
+        setMsg(`❌ ${data.detail || "Delete failed"}`);
+      }
+    } catch { setMsg("❌ Server error"); }
+  };
+
   const changeRole = async (userId, role) => {
     setMsg("");
     try {
@@ -62,6 +81,8 @@ export default function AdminPanel({ user }) {
   const totalAdmins   = users.filter(u => u.role === "admin").length;
   const totalAnalysts = users.filter(u => u.role === "analyst").length;
   const blockedTxns   = txns.filter(t => t.status === "blocked").length;
+
+  const isAdmin = user.role === "admin";
 
   return (
     <div>
@@ -118,7 +139,7 @@ export default function AdminPanel({ user }) {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {["ID", "Name", "Email", "Role", "Balance", "Joined", "Change Role"].map(h => (
+                  {["ID", "Name", "Email", "Role", "Balance", "Joined", isAdmin ? "Change Role" : "Action"].map(h => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
@@ -143,8 +164,10 @@ export default function AdminPanel({ user }) {
                     <td style={s.td}>
                       {u.id === user.id ? (
                         <span style={{ fontSize: 12, color: T.muted }}>You</span>
+                      ) : !isAdmin ? (
+                        <span style={{ fontSize: 12, color: T.muted }}>View only</span>
                       ) : (
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {["user", "analyst", "admin"].map(role => (
                             <button key={role}
                               onClick={() => changeRole(u.id, role)}
@@ -156,6 +179,11 @@ export default function AdminPanel({ user }) {
                               {role}
                             </button>
                           ))}
+                          <button
+                            onClick={() => deleteUser(u.id, u.name)}
+                            style={{ ...s.navItem, fontSize: 11, padding: "3px 8px", color: T.red, borderColor: "rgba(239,68,68,0.3)" }}>
+                            🗑️
+                          </button>
                         </div>
                       )}
                     </td>

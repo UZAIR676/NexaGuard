@@ -24,7 +24,11 @@ function MiniBar({ value, max = 100, color }) {
 }
 
 function timeAgo(iso) {
-  const diffMs = Date.now() - new Date(iso).getTime();
+  if (!iso) return "";
+  // SQLite stores naive UTC strings like "2026-06-22 14:00:00" (no timezone marker).
+  // Without forcing UTC, browsers parse this as local time and the math goes wrong.
+  const normalized = iso.includes("T") ? iso : iso.replace(" ", "T") + "Z";
+  const diffMs = Date.now() - new Date(normalized).getTime();
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
@@ -33,7 +37,9 @@ function timeAgo(iso) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ user }) {
+  const isStaff = user?.role === "admin" || user?.role === "analyst";
+  const token = localStorage.getItem("ng_token");
   const [indices, setIndices] = useState([]);
   const [movers, setMovers] = useState({ top_gainers: [], top_losers: [] });
   const [loading, setLoading] = useState(true);
@@ -41,6 +47,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [myTxns, setMyTxns] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -49,22 +56,36 @@ export default function Dashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [idx, mv, hist, st, rc, al] = await Promise.all([
-        api.indices(),
-        api.movers(),
-        api.history("^GSPC", "1mo"),
-        api.fraudStats(),
-        api.fraudRecent(5),
-        api.fraudAlerts(4),
-      ]);
-      setIndices(idx);
-      setMovers(mv);
-      setStats(st);
-      setRecent(rc);
-      setAlerts(al);
-
-      if (hist?.data?.length) {
-        setChartData(hist.data.map((d, i) => ({ i, val: d.close, date: d.date })));
+      if (isStaff) {
+        const [idx, mv, hist, st, rc, al] = await Promise.all([
+          api.indices(),
+          api.movers(),
+          api.history("^GSPC", "1mo"),
+          api.fraudStats(),
+          api.fraudRecent(5, token),
+          api.fraudAlerts(4, token),
+        ]);
+        setIndices(idx);
+        setMovers(mv);
+        setStats(st);
+        setRecent(rc);
+        setAlerts(al);
+        if (hist?.data?.length) {
+          setChartData(hist.data.map((d, i) => ({ i, val: d.close, date: d.date })));
+        }
+      } else {
+        const [idx, mv, hist, tx] = await Promise.all([
+          api.indices(),
+          api.movers(),
+          api.history("^GSPC", "1mo"),
+          fetch(`http://localhost:8000/api/auth/transactions?token=${token}`).then(r => r.json()),
+        ]);
+        setIndices(idx);
+        setMovers(mv);
+        setMyTxns(Array.isArray(tx) ? tx : []);
+        if (hist?.data?.length) {
+          setChartData(hist.data.map((d, i) => ({ i, val: d.close, date: d.date })));
+        }
       }
     } catch (e) {
       console.log("Backend not available:", e);
@@ -142,7 +163,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Fraud Stats — real counts from transactions table */}
+        {/* Fraud Stats — real counts from transactions table, staff only (system-wide data) */}
+        {isStaff ? (
         <div style={s.card}>
           <div style={s.h3}>Fraud Detection Stats</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -176,6 +198,24 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        ) : (
+        <div style={s.card}>
+          <div style={s.h3}>Your Account</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ background: T.surface, borderRadius: 8, padding: "12px 14px", border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, textTransform: "uppercase" }}>Balance</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: T.accent }}>${(user?.balance ?? 0).toLocaleString()}</div>
+            </div>
+            <div style={{ background: T.surface, borderRadius: 8, padding: "12px 14px", border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, textTransform: "uppercase" }}>Your Transactions</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: T.green }}>{myTxns.length}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
+            Fraud monitoring stats are only visible to admins and analysts.
+          </div>
+        </div>
+        )}
       </div>
 
       {/* Top Gainers / Losers */}
@@ -219,10 +259,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Transactions + Alerts — real, from transactions table */}
+      {/* Recent Transactions + Alerts */}
       <div style={s.grid2}>
         <div style={s.card}>
-          <div style={s.h3}>Recent Transactions</div>
+          <div style={s.h3}>{isStaff ? "Recent Transactions (All Users)" : "Your Recent Transactions"}</div>
+          {isStaff ? (
           <table style={s.table}>
             <thead><tr>{["ID", "Amount", "Merchant", "Risk", "Score"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
@@ -249,25 +290,74 @@ export default function Dashboard() {
               )}
             </tbody>
           </table>
+          ) : (
+          <table style={s.table}>
+            <thead><tr>{["Type", "Amount", "Status", "Date"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {myTxns.slice(0, 6).map(tx => (
+                <tr key={tx.id}>
+                  <td style={{ ...s.td, textTransform: "capitalize" }}>{tx.type}</td>
+                  <td style={{ ...s.td, fontWeight: 600 }}>${Number(tx.amount).toLocaleString()}</td>
+                  <td style={s.td}>
+                    <span style={{ ...s.badge, ...(tx.status === "blocked" ? s.badgeRed : tx.status === "completed" ? s.badgeGreen : s.badgeAmber) }}>
+                      {tx.status}
+                    </span>
+                  </td>
+                  <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{timeAgo(tx.created_at)}</td>
+                </tr>
+              ))}
+              {myTxns.length === 0 && !loading && (
+                <tr><td colSpan={4} style={{ ...s.td, color: T.muted, textAlign: "center" }}>
+                  No transactions yet — head to Banking to send or deposit money
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+          )}
         </div>
 
         <div style={s.card}>
-          <div style={s.h3}>Live Alerts</div>
-          {alerts.map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: i < alerts.length - 1 ? `1px solid ${T.border}` : "none", alignItems: "flex-start" }}>
-              <div style={{ fontSize: 18, marginTop: 1 }}>
-                {a.type === "high" ? "🚨" : "⚠️"}
+          <div style={s.h3}>{isStaff ? "Live Alerts (All Users)" : "Your Alerts"}</div>
+          {isStaff ? (
+          <>
+            {alerts.map((a, i) => (
+              <div key={i} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: i < alerts.length - 1 ? `1px solid ${T.border}` : "none", alignItems: "flex-start" }}>
+                <div style={{ fontSize: 18, marginTop: 1 }}>
+                  {a.type === "high" ? "🚨" : "⚠️"}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>{a.msg}</div>
+                  <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>{timeAgo(a.created_at)}</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: 13, lineHeight: 1.5 }}>{a.msg}</div>
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>{timeAgo(a.created_at)}</div>
+            ))}
+            {alerts.length === 0 && !loading && (
+              <div style={{ ...s.muted, textAlign: "center", padding: "24px 0" }}>
+                No alerts yet — medium/high risk transactions will show here
               </div>
-            </div>
-          ))}
-          {alerts.length === 0 && !loading && (
-            <div style={{ ...s.muted, textAlign: "center", padding: "24px 0" }}>
-              No alerts yet — medium/high risk transactions will show here
-            </div>
+            )}
+          </>
+          ) : (
+          <>
+            {myTxns.filter(tx => tx.status === "blocked" || tx.fraud_score >= 40).slice(0, 6).map((tx, i) => (
+              <div key={tx.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: `1px solid ${T.border}`, alignItems: "flex-start" }}>
+                <div style={{ fontSize: 18, marginTop: 1 }}>
+                  {tx.status === "blocked" ? "🚨" : "⚠️"}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    {tx.status === "blocked" ? "Blocked" : "Flagged"} {tx.type} of ${Number(tx.amount).toLocaleString()} — fraud score {tx.fraud_score}%
+                  </div>
+                  <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>{timeAgo(tx.created_at)}</div>
+                </div>
+              </div>
+            ))}
+            {myTxns.filter(tx => tx.status === "blocked" || tx.fraud_score >= 40).length === 0 && !loading && (
+              <div style={{ ...s.muted, textAlign: "center", padding: "24px 0" }}>
+                No alerts on your account — all your transactions look safe
+              </div>
+            )}
+          </>
           )}
         </div>
       </div>

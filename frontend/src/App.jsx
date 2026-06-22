@@ -13,8 +13,9 @@ import Banking from "./pages/Banking";
 import AIAdvisor from "./pages/AIAdvisor";
 import CSVScanner from "./pages/CSVScanner";
 function Nav({ user, page, setPage }) {
-const basePages = ["Dashboard", "Banking","CSV Scanner", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
-  const extraPages = (user.role === "admin" || user.role === "analyst") ? ["Admin Panel"] : [];
+const basePages = ["Dashboard", "Banking", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
+  const isStaff = user.role === "admin" || user.role === "analyst";
+  const extraPages = isStaff ? ["CSV Scanner", "Admin Panel"] : [];
   const allPages = [...basePages, ...extraPages];
 
   const roleColor =
@@ -95,14 +96,14 @@ export default function App() {
   }
 
   const pages = {
-    "Dashboard":       <Dashboard />,
+    "Dashboard":       <Dashboard user={user} />,
     "Banking":         <Banking user={user} onBalanceUpdate={handleBalanceUpdate} />,
     "Fraud Detection": <FraudDetection />,
     "Market Data":     <MarketData />,
     "Alerts":          <Alerts />,
     "Settings":        <Settings user={user} />,
     "AI Advisor": <AIAdvisor user={user} />,
-    "CSV Scanner": <CSVScanner />,
+    "CSV Scanner": (user.role === "admin" || user.role === "analyst") ? <CSVScanner /> : <Dashboard />,
     "Profile":         <Profile user={user} onLogout={handleLogout} onUpdate={setUser} />,
     "Admin Panel":     <AdminPanel user={user} />,
   };

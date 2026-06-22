@@ -34,6 +34,13 @@ def init_db():
 init_db()
 
 from services.fraud_detection import model, scaler_amount, scaler_time
+from routes.auth import get_user_by_token
+
+def require_staff(token: str):
+    user = get_user_by_token(token)
+    if user["role"] not in ["admin", "analyst"]:
+        raise HTTPException(403, "Only admin or analyst can access the CSV scanner")
+    return user
 
 def batch_predict(df: pd.DataFrame):
     cols = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
@@ -52,6 +59,7 @@ def risk_level(score):
 
 @router.post("/scan")
 async def scan_csv(file: UploadFile = File(...), token: str = ""):
+    require_staff(token)
     if not file.filename.endswith('.csv'):
         raise HTTPException(400, "Only CSV files allowed")
     content = await file.read()
@@ -128,6 +136,7 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
 
 @router.get("/history")
 async def get_history(token: str = ""):
+    require_staff(token)
     try:
         con  = sqlite3.connect(DB)
         rows = con.execute("""
@@ -147,6 +156,7 @@ async def get_history(token: str = ""):
 
 @router.get("/history/{scan_id}")
 async def get_scan_detail(scan_id: int, token: str = ""):
+    require_staff(token)
     try:
         con = sqlite3.connect(DB)
         row = con.execute("""
@@ -171,6 +181,7 @@ async def get_scan_detail(scan_id: int, token: str = ""):
 
 @router.post("/export")
 async def export_results(file: UploadFile = File(...), token: str = ""):
+    require_staff(token)
     # Re-scan the file for export (fresh scan, no DB save needed)
     if not file.filename.endswith('.csv'):
         raise HTTPException(400, "Only CSV files allowed")
