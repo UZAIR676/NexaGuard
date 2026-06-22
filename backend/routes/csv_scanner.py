@@ -9,10 +9,9 @@ import io, csv, warnings, sqlite3, os, json
 from datetime import datetime
 warnings.filterwarnings('ignore')
 
-router   = APIRouter(prefix="/api/csv", tags=["csv"])
-DB       = os.path.join(os.path.dirname(__file__), '..', 'nexaguard.db')
+router = APIRouter(prefix="/api/csv", tags=["csv"])
+DB     = os.path.join(os.path.dirname(__file__), '..', 'nexaguard.db')
 
-# ── Init DB table ──────────────────────────────────────────────────────────
 def init_db():
     con = sqlite3.connect(DB)
     con.execute("""
@@ -34,17 +33,15 @@ def init_db():
 
 init_db()
 
-# ── Load model ─────────────────────────────────────────────────────────────
 from services.fraud_detection import model, scaler_amount, scaler_time
 
-# ── Batch Predict ──────────────────────────────────────────────────────────
 def batch_predict(df: pd.DataFrame):
     cols = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
     X    = df[cols].values.astype(float)
     X[:, 0]  = scaler_time.transform(X[:, 0].reshape(-1, 1)).flatten()
     X[:, 29] = scaler_amount.transform(X[:, 29].reshape(-1, 1)).flatten()
-    preds    = model.predict(X)
-    probas   = model.predict_proba(X)[:, 1]
+    preds  = model.predict(X)
+    probas = model.predict_proba(X)[:, 1]
     return preds, probas
 
 def risk_level(score):
@@ -53,12 +50,10 @@ def risk_level(score):
     if score >= 20: return "LOW RISK"
     return "SAFE"
 
-# ── Routes ─────────────────────────────────────────────────────────────────
 @router.post("/scan")
 async def scan_csv(file: UploadFile = File(...), token: str = ""):
     if not file.filename.endswith('.csv'):
         raise HTTPException(400, "Only CSV files allowed")
-
     content = await file.read()
     try:
         df = pd.read_csv(io.StringIO(content.decode('utf-8')))
@@ -66,7 +61,6 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
         raise HTTPException(400, "Invalid CSV format")
 
     df.columns = [c.strip() for c in df.columns]
-
     if "Time" not in df.columns or "Amount" not in df.columns:
         raise HTTPException(400, "Missing columns: Time and Amount required")
 
@@ -85,18 +79,16 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
         score    = round(float(probas[idx]) * 100, 2)
         is_fraud = bool(preds[idx] == 1)
         amount   = float(df.iloc[idx]["Amount"])
-
         if is_fraud:
             fraud_count   += 1
             total_blocked += amount
-
         results.append({
-            "row":        idx + 1,
-            "amount":     amount,
+            "row":         idx + 1,
+            "amount":      amount,
             "fraud_score": score,
-            "is_fraud":   is_fraud,
-            "risk_level": risk_level(score),
-            "action":     "BLOCK" if is_fraud else "APPROVE",
+            "is_fraud":    is_fraud,
+            "risk_level":  risk_level(score),
+            "action":      "BLOCK" if is_fraud else "APPROVE",
         })
 
     results.sort(key=lambda x: x["fraud_score"], reverse=True)
@@ -108,30 +100,31 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
         "safe_count":    total - fraud_count,
         "fraud_rate":    round(fraud_count / total * 100, 2) if total > 0 else 0,
         "total_blocked": round(total_blocked, 2),
-        "results":       results
+        "results":       results,
     }
 
-    # Save to DB
+    # ✅ FIX: cursor pe lastrowid hota hai, connection pe nahi
     try:
         con = sqlite3.connect(DB)
-        con.execute("""
-            INSERT INTO csv_scans (user_token, filename, total, fraud_count, safe_count, fraud_rate, total_blocked, results)
+        cur = con.execute("""
+            INSERT INTO csv_scans
+              (user_token, filename, total, fraud_count, safe_count, fraud_rate, total_blocked, results)
             VALUES (?,?,?,?,?,?,?,?)
         """, (
             token, file.filename, total, fraud_count,
             total - fraud_count,
             round(fraud_count / total * 100, 2) if total > 0 else 0,
             round(total_blocked, 2),
-            json.dumps(results[:1000])  # Save top 1000 results
+            json.dumps(results[:1000]),
         ))
-        scan_id = con.lastrowid
+        scan_data["scan_id"] = cur.lastrowid   # ✅ cur.lastrowid
         con.commit()
         con.close()
-        scan_data["scan_id"] = scan_id
     except Exception as e:
         print(f"DB save error: {e}")
 
     return scan_data
+
 
 @router.get("/history")
 async def get_history(token: str = ""):
@@ -143,10 +136,14 @@ async def get_history(token: str = ""):
             ORDER BY created_at DESC LIMIT 20
         """, (token,)).fetchall()
         con.close()
-        return [{"id":r[0],"filename":r[1],"total":r[2],"fraud_count":r[3],
-                 "fraud_rate":r[4],"total_blocked":r[5],"created_at":r[6]} for r in rows]
+        return [
+            {"id": r[0], "filename": r[1], "total": r[2], "fraud_count": r[3],
+             "fraud_rate": r[4], "total_blocked": r[5], "created_at": r[6]}
+            for r in rows
+        ]
     except:
         return []
+
 
 @router.get("/history/{scan_id}")
 async def get_scan_detail(scan_id: int, token: str = ""):
@@ -164,17 +161,39 @@ async def get_scan_detail(scan_id: int, token: str = ""):
             "fraud_count": row[3], "safe_count": row[4],
             "fraud_rate": row[5], "total_blocked": row[6],
             "results": json.loads(row[7]),
-            "created_at": row[8]
+            "created_at": row[8],
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
 
+
 @router.post("/export")
-async def export_results(file: UploadFile = File(...)):
-    scan_result = await scan_csv(file)
-    results     = scan_result["results"]
+async def export_results(file: UploadFile = File(...), token: str = ""):
+    # Re-scan the file for export (fresh scan, no DB save needed)
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(400, "Only CSV files allowed")
+    content = await file.read()
+    df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+    df.columns = [c.strip() for c in df.columns]
+    for i in range(1, 29):
+        if f"V{i}" not in df.columns:
+            df[f"V{i}"] = 0.0
+
+    preds, probas = batch_predict(df)
+    results = []
+    for idx in range(len(df)):
+        score    = round(float(probas[idx]) * 100, 2)
+        is_fraud = bool(preds[idx] == 1)
+        results.append({
+            "row":         idx + 1,
+            "amount":      float(df.iloc[idx]["Amount"]),
+            "fraud_score": score,
+            "is_fraud":    is_fraud,
+            "risk_level":  risk_level(score),
+            "action":      "BLOCK" if is_fraud else "APPROVE",
+        })
 
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=["row","amount","fraud_score","is_fraud","risk_level","action"])
