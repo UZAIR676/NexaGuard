@@ -102,13 +102,6 @@ GMAIL_PASS=your_app_password
 SECRET_KEY=your_secret_key
 ```
 
-## 👤 Default Admin
-
-```
-Email: admin@nexaguard.ai
-Password: admin123
-```
-
 ## 📊 ML Model Performance
 
 | Model | Accuracy | Use Case |
