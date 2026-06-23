@@ -13,6 +13,26 @@ export default function AdminPanel({ user }) {
   useEffect(() => { loadUsers(); loadTxns(); }, []);
 
   const token = localStorage.getItem("ng_token");
+  const pendingTxns = txns.filter(t => t.status === "pending");
+
+  const reviewTransaction = async (txnId, action) => {
+    setMsg("");
+    try {
+      const res = await fetch(`${BASE}/api/auth/admin/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, transaction_id: txnId, action }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✅ Transaction ${action === "approve" ? "approved" : "rejected"}`);
+        loadTxns();
+        loadUsers();
+      } else {
+        setMsg(`❌ ${data.detail || "Review failed"}`);
+      }
+    } catch { setMsg("❌ Server error"); }
+  };
 
   const loadUsers = async () => {
     setLoading(true);
@@ -32,8 +52,24 @@ export default function AdminPanel({ user }) {
     } catch { }
   };
 
+  const changeRole = async (userId, role) => {
+    setMsg("");
+    try {
+      const res = await fetch(`${BASE}/api/auth/admin/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, user_id: userId, role }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✅ Role updated to ${role}`);
+        loadUsers();
+      }
+    } catch { setMsg("❌ Failed to update role"); }
+  };
+
   const deleteUser = async (userId, userName) => {
-    if (!window.confirm(`"${userName}" after deleting this user you cannot undo!`)) return;
+    if (!window.confirm(`"${userName}" ko delete karna chahte ho? Yeh action undo nahi ho sakta!`)) return;
     setMsg("");
     try {
       const res  = await fetch(`${BASE}/api/auth/admin/delete-user`, {
@@ -51,22 +87,6 @@ export default function AdminPanel({ user }) {
     } catch { setMsg("❌ Server error"); }
   };
 
-  const changeRole = async (userId, role) => {
-    setMsg("");
-    try {
-      const res = await fetch(`${BASE}/api/auth/admin/role`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, user_id: userId, role }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMsg(`✅ Role updated to ${role}`);
-        loadUsers();
-      }
-    } catch { setMsg("❌ Failed to update role"); }
-  };
-
   const roleColor = (r) =>
     r === "admin"   ? { background: "rgba(239,68,68,0.15)",   color: T.red   } :
     r === "analyst" ? { background: "rgba(245,158,11,0.15)",  color: T.amber } :
@@ -81,8 +101,6 @@ export default function AdminPanel({ user }) {
   const totalAdmins   = users.filter(u => u.role === "admin").length;
   const totalAnalysts = users.filter(u => u.role === "analyst").length;
   const blockedTxns   = txns.filter(t => t.status === "blocked").length;
-
-  const isAdmin = user.role === "admin";
 
   return (
     <div>
@@ -111,7 +129,7 @@ export default function AdminPanel({ user }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {[["users","👥 Users"], ["transactions","💳 Transactions"]].map(([t, label]) => (
+        {[["users","👥 Users"], ["transactions","💳 Transactions"], ["pending", `⏳ Pending Review${pendingTxns.length ? ` (${pendingTxns.length})` : ""}`]].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             style={{ ...s.navItem, ...(tab === t ? s.navItemActive : {}) }}>
             {label}
@@ -139,7 +157,7 @@ export default function AdminPanel({ user }) {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {["ID", "Name", "Email", "Role", "Balance", "Joined", isAdmin ? "Change Role" : "Action"].map(h => (
+                  {["ID", "Name", "Email", "Role", "Balance", "Joined", "Change Role"].map(h => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
@@ -164,7 +182,7 @@ export default function AdminPanel({ user }) {
                     <td style={s.td}>
                       {u.id === user.id ? (
                         <span style={{ fontSize: 12, color: T.muted }}>You</span>
-                      ) : !isAdmin ? (
+                      ) : user.role !== "admin" ? (
                         <span style={{ fontSize: 12, color: T.muted }}>View only</span>
                       ) : (
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -233,6 +251,57 @@ export default function AdminPanel({ user }) {
                     {parseFloat(t.fraud_score || 0).toFixed(1)}%
                   </td>
                   <td style={{ ...s.td, fontSize: 11, color: T.muted }}>{t.created_at?.slice(0, 16)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {/* Pending Review Tab */}
+      {tab === "pending" && (
+        <div style={s.card}>
+          <div style={{ ...s.h3, marginBottom: 16 }}>Transactions Awaiting Review (Score 40-70%)</div>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                {["ID", "User", "Type", "Amount", "To", "Fraud Score", "Time", "Action"].map(h => (
+                  <th key={h} style={s.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pendingTxns.length === 0 ? (
+                <tr><td colSpan={8} style={{ ...s.td, textAlign: "center", color: T.muted, padding: 40 }}>No transactions pending review 🎉</td></tr>
+              ) : pendingTxns.map(t => (
+                <tr key={t.id}>
+                  <td style={{ ...s.td, color: T.muted, fontSize: 12 }}>#{t.id}</td>
+                  <td style={{ ...s.td, fontSize: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{t.user}</div>
+                    <div style={{ color: T.muted, fontSize: 11 }}>{t.email}</div>
+                  </td>
+                  <td style={s.td}>
+                    <span style={{ ...s.badge, background: "rgba(79,142,247,0.15)", color: T.accent }}>
+                      {t.type?.toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ ...s.td, fontWeight: 600 }}>${parseFloat(t.amount).toLocaleString()}</td>
+                  <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{t.to_email || "—"}</td>
+                  <td style={{ ...s.td, color: T.amber, fontWeight: 600 }}>
+                    {parseFloat(t.fraud_score || 0).toFixed(1)}%
+                  </td>
+                  <td style={{ ...s.td, fontSize: 11, color: T.muted }}>{t.created_at?.slice(0, 16)}</td>
+                  <td style={s.td}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => reviewTransaction(t.id, "approve")}
+                        style={{ ...s.navItem, fontSize: 11, padding: "3px 10px", color: T.green, borderColor: "rgba(34,197,94,0.3)" }}>
+                        ✅ Approve
+                      </button>
+                      <button onClick={() => reviewTransaction(t.id, "reject")}
+                        style={{ ...s.navItem, fontSize: 11, padding: "3px 10px", color: T.red, borderColor: "rgba(239,68,68,0.3)" }}>
+                        ❌ Reject
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

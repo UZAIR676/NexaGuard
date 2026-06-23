@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from schemas import SignupIn, LoginIn, UpdateIn
 from schemas_bank import TransactionIn, RoleUpdateIn
 from email_service import send_email, generate_otp, otp_email, transaction_email, welcome_email
+from services.banking_fraud import predict_banking_fraud
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -48,12 +49,6 @@ def init_db():
             used       INTEGER DEFAULT 0
         )
     """)
-    existing = con.execute("SELECT id FROM users WHERE email='admin@nexaguard.ai'").fetchone()
-    if not existing:
-        con.execute(
-            "INSERT INTO users (name, email, password, role, balance, verified) VALUES (?,?,?,?,?,?)",
-            ("Admin", "admin@nexaguard.ai", hashlib.sha256("admin123".encode()).hexdigest(), "admin", 999999.00, 1)
-        )
     con.commit()
     con.close()
 
@@ -172,6 +167,13 @@ def login(body: LoginIn):
         token = secrets.token_hex(32)
         con.execute("UPDATE users SET token=? WHERE id=?", (token, row[0]))
         con.commit()
+        # Login alert — user apne account ka login activity dekh sake
+        from routes.alerts import create_alert
+        from datetime import datetime
+        login_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        create_alert(row[0], row[2], "info", "login",
+                     f"Someone logged into your account on {login_time}",
+                     {"email": row[2], "time": login_time})
         return {"token": token, "user": {"id": row[0], "name": row[1], "email": row[2], "role": row[4], "balance": row[5]}}
     finally:
         con.close()
@@ -211,27 +213,102 @@ def update_role(body: RoleUpdateIn):
     if body.role not in ["user", "analyst", "admin"]:
         raise HTTPException(400, "Invalid role")
     con = get_db()
+    # Get target user info for alert
+    target = con.execute("SELECT id, email, role FROM users WHERE id=?", (body.user_id,)).fetchone()
     con.execute("UPDATE users SET role=? WHERE id=?", (body.role, body.user_id))
     con.commit()
     con.close()
+    # Alert — admin sees it, target user also sees it
+    from routes.alerts import create_alert
+    if target:
+        old_role = target[2]
+        create_alert(target[0], target[1], "medium", "user_activity",
+                     f"Your role was changed: {old_role} → {body.role}",
+                     {"changed_by": user["email"], "old_role": old_role, "new_role": body.role})
     return {"success": True}
 
 # ── Transactions ───────────────────────────────────────────────────────────
+def _build_risk_features(con, user, body):
+    """Real-time, server-side features for the banking fraud model — never trust the client for these."""
+    is_new_recipient = 0
+    if body.type == "send" and body.to_email:
+        prior = con.execute(
+            "SELECT COUNT(*) FROM transactions WHERE user_id=? AND to_email=?",
+            (user["id"], body.to_email.lower())
+        ).fetchone()[0]
+        is_new_recipient = 1 if prior == 0 else 0
+
+    tx_count_last_24h = con.execute(
+        "SELECT COUNT(*) FROM transactions WHERE user_id=? AND created_at >= datetime('now','-1 day')",
+        (user["id"],)
+    ).fetchone()[0]
+
+    created_at_row = con.execute("SELECT created_at FROM users WHERE id=?", (user["id"],)).fetchone()
+    account_age_days = 9999
+    if created_at_row and created_at_row[0]:
+        try:
+            created = datetime.strptime(created_at_row[0][:19], "%Y-%m-%d %H:%M:%S")
+            account_age_days = (datetime.utcnow() - created).total_seconds() / 86400
+        except Exception:
+            account_age_days = 9999
+
+    return {
+        "amount": body.amount,
+        "balance": user["balance"],
+        "is_new_recipient": is_new_recipient,
+        "tx_count_last_24h": tx_count_last_24h,
+        "account_age_days": account_age_days,
+        "is_outgoing": 1 if body.type in ["send", "withdraw"] else 0,
+    }
+
+
 @router.post("/transaction")
 def make_transaction(body: TransactionIn):
     user = get_user_by_token(body.token)
     con = get_db()
     try:
-        if body.fraud_score > 70:
+        from routes.alerts import create_alert
+
+        # ── Validate recipient exists before doing anything else (no sending money into thin air) ──
+        if body.type == "send" and body.to_email:
+            recipient_check = con.execute("SELECT id FROM users WHERE email=?", (body.to_email.lower().strip(),)).fetchone()
+            if not recipient_check:
+                raise HTTPException(400, "Recipient not found — this email is not a registered NexaGuard account")
+            if body.to_email.lower().strip() == user["email"].lower():
+                raise HTTPException(400, "You cannot send money to yourself")
+
+        ml_result = predict_banking_fraud(_build_risk_features(con, user, body))
+        fraud_score = ml_result["fraud_score"]
+
+        # ── Tier 1: High risk → block outright ──
+        if fraud_score > 70:
             con.execute(
                 "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score) VALUES (?,?,?,?,?,?,?)",
-                (user["id"], body.type, body.amount, body.to_email, body.description, "blocked", body.fraud_score)
+                (user["id"], body.type, body.amount, body.to_email, body.description, "blocked", fraud_score)
             )
             con.commit()
             send_email(user["email"], "🚨 NexaGuard — Transaction Blocked",
                 transaction_email(user["name"], body.type, body.amount, "blocked", user["balance"]))
-            return {"success": False, "status": "blocked", "reason": "High fraud risk detected"}
+            create_alert(user["id"], user["email"], "high", "transaction",
+                         f"Transaction blocked — ${body.amount:,.2f} {body.type} (fraud score: {fraud_score}%)",
+                         {"amount": body.amount, "type": body.type, "fraud_score": fraud_score})
+            return {"success": False, "status": "blocked", "reason": "High fraud risk detected", "fraud_score": fraud_score}
 
+        # ── Tier 2: Medium risk → hold for admin/analyst review, no balance change yet ──
+        if fraud_score >= 40:
+            con.execute(
+                "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score) VALUES (?,?,?,?,?,?,?)",
+                (user["id"], body.type, body.amount, body.to_email, body.description, "pending", fraud_score)
+            )
+            con.commit()
+            send_email(user["email"], "⏳ NexaGuard — Transaction Under Review",
+                transaction_email(user["name"], body.type, body.amount, "pending", user["balance"]))
+            create_alert(user["id"], user["email"], "medium", "transaction",
+                         f"Transaction flagged for review — ${body.amount:,.2f} {body.type} (fraud score: {fraud_score}%)",
+                         {"amount": body.amount, "type": body.type, "fraud_score": fraud_score})
+            return {"success": True, "status": "pending", "reason": "Flagged for manual review", "fraud_score": fraud_score}
+
+        # ── Tier 3: Low risk → auto-approve ──
         if body.type in ["send", "withdraw"]:
             if user["balance"] < body.amount:
                 raise HTTPException(400, "Insufficient balance")
@@ -243,7 +320,7 @@ def make_transaction(body: TransactionIn):
 
         con.execute(
             "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score) VALUES (?,?,?,?,?,?,?)",
-            (user["id"], body.type, body.amount, body.to_email, body.description, "completed", body.fraud_score)
+            (user["id"], body.type, body.amount, body.to_email, body.description, "completed", fraud_score)
         )
         con.commit()
         new_balance = con.execute("SELECT balance FROM users WHERE id=?", (user["id"],)).fetchone()[0]
@@ -251,10 +328,95 @@ def make_transaction(body: TransactionIn):
         # Send transaction email
         send_email(user["email"], "✅ NexaGuard — Transaction Confirmed",
             transaction_email(user["name"], body.type, body.amount, "completed", new_balance))
+        create_alert(user["id"], user["email"], "success", "transaction",
+                     f"Transaction completed — ${body.amount:,.2f} {body.type}",
+                     {"amount": body.amount, "type": body.type, "new_balance": round(new_balance, 2)})
 
-        return {"success": True, "status": "completed", "new_balance": round(new_balance, 2)}
+        # Notify recipient too, if this was a send to another NexaGuard user
+        if body.type == "send" and body.to_email:
+            recipient = con.execute("SELECT id, name, email, balance FROM users WHERE email=?", (body.to_email.lower(),)).fetchone()
+            if recipient:
+                send_email(recipient[2], "✅ NexaGuard — Money Received",
+                    transaction_email(recipient[1], "receive", body.amount, "completed", recipient[3]))
+                create_alert(recipient[0], recipient[2], "success", "transaction",
+                             f"You received ${body.amount:,.2f} from {user['name']}",
+                             {"amount": body.amount, "from": user["email"]})
+
+        return {"success": True, "status": "completed", "new_balance": round(new_balance, 2), "fraud_score": fraud_score}
     finally:
         con.close()
+
+
+class ReviewIn(BaseModel):
+    token: str
+    transaction_id: int
+    action: str  # "approve" | "reject"
+
+
+@router.post("/admin/review")
+def review_transaction(body: ReviewIn):
+    """Admin/analyst approves or rejects a pending (medium-risk) transaction."""
+    user = get_user_by_token(body.token)
+    if user["role"] not in ["admin", "analyst"]:
+        raise HTTPException(403, "Only admin or analyst can review transactions")
+
+    con = get_db()
+    try:
+        from routes.alerts import create_alert
+
+        row = con.execute(
+            "SELECT t.user_id,t.type,t.amount,t.to_email,t.status,u.email,u.name,u.balance "
+            "FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=?",
+            (body.transaction_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Transaction not found")
+        tx_user_id, tx_type, amount, to_email, status, tx_email, tx_name, tx_balance = row
+        if status != "pending":
+            raise HTTPException(400, f"Transaction is already {status}, not pending")
+
+        if body.action == "approve":
+            if tx_type in ["send", "withdraw"]:
+                if tx_balance < amount:
+                    raise HTTPException(400, "User no longer has sufficient balance")
+                con.execute("UPDATE users SET balance=balance-? WHERE id=?", (amount, tx_user_id))
+                if tx_type == "send" and to_email:
+                    con.execute("UPDATE users SET balance=balance+? WHERE email=?", (amount, to_email.lower()))
+            elif tx_type in ["receive", "deposit"]:
+                con.execute("UPDATE users SET balance=balance+? WHERE id=?", (amount, tx_user_id))
+
+            con.execute("UPDATE transactions SET status='completed' WHERE id=?", (body.transaction_id,))
+            con.commit()
+            new_balance = con.execute("SELECT balance FROM users WHERE id=?", (tx_user_id,)).fetchone()[0]
+            send_email(tx_email, "✅ NexaGuard — Transaction Approved",
+                transaction_email(tx_name, tx_type, amount, "completed", new_balance))
+            create_alert(tx_user_id, tx_email, "success", "transaction",
+                         f"Your held transaction was approved — ${amount:,.2f} {tx_type}",
+                         {"amount": amount, "type": tx_type, "reviewed_by": user["email"]})
+            if tx_type == "send" and to_email:
+                recipient = con.execute("SELECT id, name, email, balance FROM users WHERE email=?", (to_email.lower(),)).fetchone()
+                if recipient:
+                    send_email(recipient[2], "✅ NexaGuard — Money Received",
+                        transaction_email(recipient[1], "receive", amount, "completed", recipient[3]))
+                    create_alert(recipient[0], recipient[2], "success", "transaction",
+                                 f"You received ${amount:,.2f} from {tx_name}",
+                                 {"amount": amount, "from": tx_email})
+            return {"success": True, "status": "completed"}
+
+        elif body.action == "reject":
+            con.execute("UPDATE transactions SET status='blocked' WHERE id=?", (body.transaction_id,))
+            con.commit()
+            send_email(tx_email, "🚨 NexaGuard — Transaction Rejected",
+                transaction_email(tx_name, tx_type, amount, "blocked", tx_balance))
+            create_alert(tx_user_id, tx_email, "high", "transaction",
+                         f"Your held transaction was rejected — ${amount:,.2f} {tx_type}",
+                         {"amount": amount, "type": tx_type, "reviewed_by": user["email"]})
+            return {"success": True, "status": "blocked"}
+
+        raise HTTPException(400, "action must be 'approve' or 'reject'")
+    finally:
+        con.close()
+
 
 @router.get("/transactions")
 def get_transactions(token: str):

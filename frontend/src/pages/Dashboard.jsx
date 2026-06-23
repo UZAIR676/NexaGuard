@@ -51,25 +51,36 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 15000); // refresh every 15s so "Live" is actually live
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
       if (isStaff) {
-        const [idx, mv, hist, st, rc, al] = await Promise.all([
+        const [idx, mv, hist, st, allTx] = await Promise.all([
           api.indices(),
           api.movers(),
           api.history("^GSPC", "1mo"),
           api.fraudStats(),
-          api.fraudRecent(5, token),
-          api.fraudAlerts(4, token),
+          fetch(`http://localhost:8000/api/auth/transactions?token=${token}`).then(r => r.json()),
         ]);
         setIndices(idx);
         setMovers(mv);
         setStats(st);
-        setRecent(rc);
-        setAlerts(al);
+        const txList = Array.isArray(allTx) ? allTx : [];
+        setRecent(txList.slice(0, 6));
+        setAlerts(
+          txList
+            .filter(t => t.status === "blocked" || t.fraud_score >= 40)
+            .slice(0, 6)
+            .map(t => ({
+              type: t.status === "blocked" ? "high" : "medium",
+              msg: `${t.status === "blocked" ? "Blocked" : "Flagged"} ${t.type} of $${Number(t.amount).toLocaleString()} by ${t.user} — fraud score ${t.fraud_score}%`,
+              created_at: t.created_at,
+            }))
+        );
         if (hist?.data?.length) {
           setChartData(hist.data.map((d, i) => ({ i, val: d.close, date: d.date })));
         }
@@ -265,27 +276,28 @@ export default function Dashboard({ user }) {
           <div style={s.h3}>{isStaff ? "Recent Transactions (All Users)" : "Your Recent Transactions"}</div>
           {isStaff ? (
           <table style={s.table}>
-            <thead><tr>{["ID", "Amount", "Merchant", "Risk", "Score"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["ID", "User", "Type", "Amount", "Status", "Score"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
               {recent.map(tx => (
                 <tr key={tx.id}>
-                  <td style={s.td}><span style={{ fontFamily: "monospace", fontSize: 12, color: T.muted }}>{tx.id}</span></td>
-                  <td style={{ ...s.td, fontWeight: 600 }}>${tx.amount.toLocaleString()}</td>
-                  <td style={s.td}>{tx.merchant}</td>
+                  <td style={s.td}><span style={{ fontFamily: "monospace", fontSize: 12, color: T.muted }}>#{tx.id}</span></td>
+                  <td style={{ ...s.td, fontSize: 12 }}>{tx.user}</td>
+                  <td style={{ ...s.td, textTransform: "capitalize" }}>{tx.type}</td>
+                  <td style={{ ...s.td, fontWeight: 600 }}>${Number(tx.amount).toLocaleString()}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, ...(tx.risk === "HIGH RISK" ? s.badgeRed : tx.risk === "MEDIUM RISK" ? s.badgeAmber : s.badgeGreen) }}>
-                      {tx.risk}
+                    <span style={{ ...s.badge, ...(tx.status === "blocked" ? s.badgeRed : tx.status === "completed" ? s.badgeGreen : s.badgeAmber) }}>
+                      {tx.status}
                     </span>
                   </td>
                   <td style={s.td}>
-                    <MiniBar value={tx.score} color={tx.score > 70 ? T.red : tx.score > 30 ? T.amber : T.green} />
-                    <span style={{ fontSize: 11, color: T.muted }}>{tx.score}%</span>
+                    <MiniBar value={tx.fraud_score} color={tx.fraud_score > 70 ? T.red : tx.fraud_score > 30 ? T.amber : T.green} />
+                    <span style={{ fontSize: 11, color: T.muted }}>{Number(tx.fraud_score).toFixed(1)}%</span>
                   </td>
                 </tr>
               ))}
               {recent.length === 0 && !loading && (
-                <tr><td colSpan={5} style={{ ...s.td, color: T.muted, textAlign: "center" }}>
-                  No transactions logged yet — run a fraud check to populate this
+                <tr><td colSpan={6} style={{ ...s.td, color: T.muted, textAlign: "center" }}>
+                  No transactions yet — head to Banking to create one
                 </td></tr>
               )}
             </tbody>

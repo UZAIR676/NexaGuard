@@ -12,6 +12,7 @@ from services.market_data import (
 )
 from routes.fraud import router as fraud_router
 from services.technical_indicators import router as technical_router
+from routes.alerts import router as alerts_router
 
 app = FastAPI(title="NexaGuard API", version="1.0.0")
 
@@ -28,6 +29,7 @@ app.include_router(ai_router)
 app.include_router(technical_router)
 app.include_router(ml_router)
 app.include_router(csv_router)
+app.include_router(alerts_router)
 # Market endpoints
 @app.get("/api/market/summary")
 def market_summary():

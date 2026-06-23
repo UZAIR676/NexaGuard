@@ -100,10 +100,10 @@ export default function App() {
     "Banking":         <Banking user={user} onBalanceUpdate={handleBalanceUpdate} />,
     "Fraud Detection": <FraudDetection />,
     "Market Data":     <MarketData />,
-    "Alerts":          <Alerts />,
+    "Alerts":          <Alerts user={user} />,
     "Settings":        <Settings user={user} />,
     "AI Advisor": <AIAdvisor user={user} />,
-    "CSV Scanner": (user.role === "admin" || user.role === "analyst") ? <CSVScanner /> : <Dashboard />,
+    "CSV Scanner": <CSVScanner user={user} />,
     "Profile":         <Profile user={user} onLogout={handleLogout} onUpdate={setUser} />,
     "Admin Panel":     <AdminPanel user={user} />,
   };

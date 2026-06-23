@@ -7,7 +7,6 @@ class TransactionIn(BaseModel):
     amount: float
     to_email: str = ""
     description: str = ""
-    fraud_score: float = 0.0
 
 # ── Admin ──────────────────────────────────────────────────────────────────
 class RoleUpdateIn(BaseModel):

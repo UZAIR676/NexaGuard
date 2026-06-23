@@ -42,7 +42,14 @@ export default function Banking({ user, onBalanceUpdate }) {
       });
       const data = await res.json();
       if (!res.ok)        { setErr(data.detail || "Transaction failed"); return; }
-      if (!data.success)  { setErr(`Transaction ${data.status}: ${data.reason}`); return; }
+      if (data.status === "blocked") { setErr(`Transaction blocked: ${data.reason}`); return; }
+      if (data.status === "pending") {
+        setMsg(`⏳ ${type.charAt(0).toUpperCase() + type.slice(1)} of $${parseFloat(amount).toLocaleString()} submitted — flagged for manual review, you'll get an email once it's decided.`);
+        setSendForm({ to_email: "", amount: "", description: "" });
+        setAmount("");
+        loadTxns();
+        return;
+      }
       setBalance(data.new_balance);
       onBalanceUpdate && onBalanceUpdate(data.new_balance);
       setMsg(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} of $${parseFloat(amount).toLocaleString()} successful!`);
