@@ -85,9 +85,10 @@ def signup(body: SignupIn):
             raise HTTPException(400, "Email already registered")
 
         token = secrets.token_hex(32)
+        STARTING_BALANCE = 0.00  # change this number to set what new signups start with
         con.execute(
-            "INSERT INTO users (name, email, password, token, role, verified) VALUES (?,?,?,?,?,?)",
-            (body.name.strip(), body.email.lower().strip(), hash_pw(body.password), token, "user", 0)
+            "INSERT INTO users (name, email, password, token, role, balance, verified) VALUES (?,?,?,?,?,?,?)",
+            (body.name.strip(), body.email.lower().strip(), hash_pw(body.password), token, "user", STARTING_BALANCE, 0)
         )
         con.commit()
 
