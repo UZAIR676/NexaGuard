@@ -190,11 +190,6 @@ def get_market_movers(symbols: tuple = None, top_n: int = 10) -> dict:
 
 
 def get_stock_history(symbol: str, period: str = "3mo", interval: str = "1d") -> dict:
-    """
-    Historical OHLCV data for charting.
-    period options:  1d 5d 1mo 3mo 6mo 1y 2y 5y 10y ytd max
-    interval options: 1m 2m 5m 15m 30m 60m 90m 1h 1d 5d 1wk 1mo 3mo
-    """
     try:
         ticker = yf.Ticker(symbol)
         hist   = ticker.history(period=period, interval=interval)
@@ -202,28 +197,62 @@ def get_stock_history(symbol: str, period: str = "3mo", interval: str = "1d") ->
         if hist.empty:
             return {"symbol": symbol, "error": "no history"}
 
+        # ── Technical Indicators ──────────────────────────────
+        # EMA
+        hist["EMA_20"] = hist["Close"].ewm(span=20, adjust=False).mean()
+        hist["EMA_50"] = hist["Close"].ewm(span=50, adjust=False).mean()
+
+        # RSI
+        delta = hist["Close"].diff()
+        gain  = delta.where(delta > 0, 0).rolling(14).mean()
+        loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        hist["RSI"] = 100 - (100 / (1 + gain / loss))
+
+        # MACD
+        ema12            = hist["Close"].ewm(span=12, adjust=False).mean()
+        ema26            = hist["Close"].ewm(span=26, adjust=False).mean()
+        hist["MACD"]     = ema12 - ema26
+        hist["MACD_sig"] = hist["MACD"].ewm(span=9, adjust=False).mean()
+        hist["MACD_hist"]= hist["MACD"] - hist["MACD_sig"]
+
+        # Bollinger Bands
+        sma20            = hist["Close"].rolling(20).mean()
+        std20            = hist["Close"].rolling(20).std()
+        hist["BB_upper"] = sma20 + std20 * 2
+        hist["BB_lower"] = sma20 - std20 * 2
+        hist["BB_mid"]   = sma20
+        # ─────────────────────────────────────────────────────
+
         records = []
         for date, row in hist.iterrows():
             records.append({
-                "date":   date.strftime("%Y-%m-%d %H:%M"),
-                "open":   round(row["Open"], 2),
-                "high":   round(row["High"], 2),
-                "low":    round(row["Low"], 2),
-                "close":  round(row["Close"], 2),
-                "volume": int(row["Volume"]),
+                "date":      date.strftime("%Y-%m-%d"),
+                "open":      round(row["Open"],  2),
+                "high":      round(row["High"],  2),
+                "low":       round(row["Low"],   2),
+                "close":     round(row["Close"], 2),
+                "volume":    int(row["Volume"]),
+                # Indicators
+                "ema20":     round(row["EMA_20"],   2) if pd.notna(row["EMA_20"])   else None,
+                "ema50":     round(row["EMA_50"],   2) if pd.notna(row["EMA_50"])   else None,
+                "rsi":       round(row["RSI"],      2) if pd.notna(row["RSI"])      else None,
+                "macd":      round(row["MACD"],     4) if pd.notna(row["MACD"])     else None,
+                "macd_sig":  round(row["MACD_sig"], 4) if pd.notna(row["MACD_sig"]) else None,
+                "macd_hist": round(row["MACD_hist"],4) if pd.notna(row["MACD_hist"])else None,
+                "bb_upper":  round(row["BB_upper"], 2) if pd.notna(row["BB_upper"]) else None,
+                "bb_lower":  round(row["BB_lower"], 2) if pd.notna(row["BB_lower"]) else None,
+                "bb_mid":    round(row["BB_mid"],   2) if pd.notna(row["BB_mid"])   else None,
             })
 
         return {
-            "symbol":  symbol,
-            "period":  period,
+            "symbol":   symbol,
+            "period":   period,
             "interval": interval,
-            "data":    records,
-            "count":   len(records),
+            "data":     records,
+            "count":    len(records),
         }
     except Exception as e:
         return {"symbol": symbol, "error": str(e)}
-
-
 def get_stock_fundamentals(symbol: str) -> dict:
     """Deep info — PE ratio, EPS, dividend, beta, analyst ratings"""
     try:

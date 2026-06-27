@@ -1,26 +1,43 @@
 import { useState, useEffect } from "react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from "recharts";
+import {
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  CartesianGrid, ReferenceLine, Cell, ComposedChart
+} from "recharts";
 import { T, s } from "../theme";
 import { api } from "../api";
 
 export default function MarketData() {
-  const [tab, setTab]               = useState("indices");
-  const [indices, setIndices]       = useState([]);
-  const [sectors, setSectors]       = useState([]);
-  const [crypto, setCrypto]         = useState([]);
-  const [movers, setMovers]         = useState({ top_gainers: [], top_losers: [] });
-  const [history, setHistory]       = useState([]);
-  const [selSym, setSelSym]         = useState("AAPL");
-  const [selPeriod, setSelPeriod]   = useState("3mo");
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState("");
+  const [tab, setTab]             = useState("indices");
+  const [indices, setIndices]     = useState([]);
+  const [sectors, setSectors]     = useState([]);
+  const [crypto, setCrypto]       = useState([]);
+  const [movers, setMovers]       = useState({ top_gainers: [], top_losers: [] });
+  const [history, setHistory]     = useState([]);
+  const [selSym, setSelSym]       = useState("AAPL");
+  const [selPeriod, setSelPeriod] = useState("3mo");
+  const [showIndicators, setShowIndicators] = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [histLoading, setHistLoading] = useState(false);
+  const [search, setSearch]       = useState("");
   const [searchResult, setSearchResult] = useState(null);
-  const [mlSignals, setMlSignals]   = useState([]);
-  const [mlLoading, setMlLoading]   = useState(false);
-  const [mlScanned, setMlScanned]   = useState(false);
+  const [mlSignals, setMlSignals] = useState([]);
+  const [mlLoading, setMlLoading] = useState(false);
+  const [mlScanned, setMlScanned] = useState(false);
+  const [searchHistory, setSearchHistory]   = useState([]);
+  const [searchFundamentals, setSearchFundamentals] = useState(null);
+  const [searchChart, setSearchChart]       = useState([]);
+  const [searchPeriod, setSearchPeriod]     = useState("3mo");
+  const [searchLoading, setSearchLoading]   = useState(false);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { loadHistory(selSym, selPeriod); }, [selSym, selPeriod]);
+  useEffect(() => {
+  if (searchResult?.symbol) {
+    api.history(searchResult.symbol, searchPeriod)
+      .then(h => setSearchChart(h.data || []));
+  }
+}, [searchPeriod]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -37,16 +54,18 @@ export default function MarketData() {
   };
 
   const loadHistory = async (sym, period) => {
+    setHistLoading(true);
     try {
       const h = await api.history(sym, period);
       setHistory(h.data || []);
     } catch { }
+    setHistLoading(false);
   };
 
   const loadMLSignals = async () => {
     setMlLoading(true);
     try {
-      const r = await fetch("http://localhost:8000/api/ml/scan");
+      const r    = await fetch("http://localhost:8000/api/ml/scan");
       const data = await r.json();
       setMlSignals(Array.isArray(data) ? data : []);
       setMlScanned(true);
@@ -54,13 +73,22 @@ export default function MarketData() {
     setMlLoading(false);
   };
 
-  const doSearch = async () => {
-    if (!search) return;
-    try {
-      const r = await api.search(search.toUpperCase());
-      setSearchResult(r);
-    } catch { }
-  };
+ const doSearch = async () => {
+  if (!search) return;
+  setSearchLoading(true);
+  try {
+    const sym = search.toUpperCase();
+    const [r, fund, hist] = await Promise.all([
+      api.search(sym),
+      api.fundamentals(sym),
+      api.history(sym, searchPeriod),
+    ]);
+    setSearchResult(r);
+    setSearchFundamentals(fund);
+    setSearchChart(hist.data || []);
+  } catch { }
+  setSearchLoading(false);
+};
 
   const fmt = (p) => {
     if (!p && p !== 0) return "N/A";
@@ -70,25 +98,41 @@ export default function MarketData() {
     return `$${p.toFixed(2)}`;
   };
 
+  // FIX: helper for percent fields that can be null/undefined,
+  // pehle "(undefined * 100)?.toFixed(2)" => "NaN%" dikhata tha.
+  const fmtPct = (v) => (v == null || isNaN(v)) ? "N/A" : `${(v * 100).toFixed(2)}%`;
+
   const color = (v) => v > 0 ? T.green : T.red;
   const sign  = (v) => v > 0 ? "+" : "";
 
-  const CHART_SYMS    = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META"];
+  const CHART_SYMS    = ["AAPL","MSFT","NVDA","TSLA","AMZN","GOOGL","META"];
   const CHART_PERIODS = [["1wk","1W"],["1mo","1M"],["3mo","3M"],["6mo","6M"],["1y","1Y"]];
 
-  const mlBuy      = mlSignals.filter(r => r.signal === "BUY"  && r.confidence === "HIGH");
-  const mlMedBuy   = mlSignals.filter(r => r.signal === "BUY"  && r.confidence !== "HIGH");
-  const mlHold     = mlSignals.filter(r => r.signal === "HOLD");
-  const mlSell     = mlSignals.filter(r => r.signal === "SELL");
-
   const TABS = [
-    { id: "indices",    label: "📊 Indices"    },
-    { id: "sectors",    label: "🏭 Sectors"    },
-    { id: "crypto",     label: "₿ Crypto"      },
-    { id: "gainers",    label: "📈 Gainers"    },
-    { id: "losers",     label: "📉 Losers"     },
-    { id: "ml signals", label: "🤖 ML Signals" },
+    { id: "indices",     label: "📊 Indices"    },
+    { id: "sectors",     label: "🏭 Sectors"    },
+    { id: "crypto",      label: "₿ Crypto"      },
+    { id: "gainers",     label: "📈 Gainers"    },
+    { id: "losers",      label: "📉 Losers"     },
+    { id: "ml signals",  label: "🤖 ML Signals" },
   ];
+
+  const mlBuy    = mlSignals.filter(r => r.signal === "BUY"  && r.confidence === "HIGH");
+  const mlMedBuy = mlSignals.filter(r => r.signal === "BUY"  && r.confidence !== "HIGH");
+  const mlHold   = mlSignals.filter(r => r.signal === "HOLD");
+  const mlSell   = mlSignals.filter(r => r.signal === "SELL");
+
+  // Latest values for indicator display
+  const latest    = history.length ? history[history.length - 1] : null;
+  const rsiColor  = !latest?.rsi ? T.muted : latest.rsi > 70 ? T.red : latest.rsi < 30 ? T.green : T.amber;
+  const macdColor = !latest?.macd ? T.muted : latest.macd > 0 ? T.green : T.red;
+
+  const tickInterval = (len) => {
+    if (len <= 10)  return 0;
+    if (len <= 30)  return 4;
+    if (len <= 65)  return 9;
+    return Math.floor(len / 6);
+  };
 
   return (
     <div>
@@ -106,24 +150,192 @@ export default function MarketData() {
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === "Enter" && doSearch()}
           />
-          <button onClick={doSearch}  style={{ ...s.navItem, ...s.navItemActive, padding: "8px 14px" }}>Search</button>
-          <button onClick={loadAll}   style={{ ...s.navItem, ...s.navItemActive, padding: "8px 14px" }}>↻ Refresh</button>
+          <button onClick={doSearch} style={{ ...s.navItem, ...s.navItemActive, padding: "8px 14px" }}>Search</button>
+          <button onClick={loadAll}  style={{ ...s.navItem, ...s.navItemActive, padding: "8px 14px" }}>↻ Refresh</button>
         </div>
       </div>
 
       {/* ── Search Result ── */}
-      {searchResult && !searchResult.error && (
-        <div style={{ ...s.card, marginBottom: 20, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>{searchResult.symbol}</div>
-            <div style={{ color: T.muted, fontSize: 13 }}>{searchResult.name}</div>
+      {searchLoading && (
+  <div style={{ ...s.card, marginBottom: 20, textAlign: "center", padding: "32px 0" }}>
+    <div style={{ color: T.muted, fontSize: 14 }}>🔍 Loading {search.toUpperCase()}...</div>
+  </div>
+)}
+
+{searchResult && !searchResult.error && !searchLoading && (
+  <div style={{ ...s.card, marginBottom: 20 }}>
+
+    {/* Top Header */}
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        {/* Symbol + Name */}
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: T.accent, fontFamily: "monospace" }}>
+            {searchResult.symbol}
           </div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: T.accent }}>{fmt(searchResult.price)}</div>
-          <div style={{ ...s.badge, ...s.badgeAmber }}>{searchResult.sector}</div>
-          <div style={{ color: T.muted, fontSize: 13 }}>Market Cap: <strong>{fmt(searchResult.market_cap)}</strong></div>
-          <button onClick={() => setSearchResult(null)} style={{ ...s.navItem, marginLeft: "auto" }}>✕ Close</button>
+          <div style={{ color: T.muted, fontSize: 14, marginTop: 2 }}>
+            {searchFundamentals?.name || searchResult.name}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <span style={{ ...s.badge, ...s.badgeAmber, fontSize: 11 }}>{searchFundamentals?.sector}</span>
+            <span style={{ ...s.badge, background: T.surface, color: T.muted, border: `1px solid ${T.border}`, fontSize: 11 }}>
+              {searchFundamentals?.industry}
+            </span>
+          </div>
         </div>
+
+        {/* Price */}
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 32, fontWeight: 700 }}>
+            {fmt(searchResult.price)}
+          </div>
+          <div style={{ fontSize: 13, color: T.muted, marginTop: 2 }}>
+            Analyst Target: <strong style={{ color: T.green }}>
+              {searchFundamentals?.analyst_target != null ? `$${searchFundamentals.analyst_target.toFixed(2)}` : "N/A"}
+            </strong>
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <span style={{ ...s.badge, ...(searchFundamentals?.recommendation === "buy" || searchFundamentals?.recommendation === "strong_buy" ? s.badgeGreen : searchFundamentals?.recommendation === "hold" ? s.badgeAmber : s.badgeRed), fontSize: 12 }}>
+              {searchFundamentals?.recommendation?.toUpperCase()} · {searchFundamentals?.analyst_count} analysts
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={() => { setSearchResult(null); setSearchFundamentals(null); setSearchChart([]); }}
+        style={{ ...s.navItem, fontSize: 12 }}>✕ Close</button>
+    </div>
+
+    {/* Fundamentals Grid */}
+    {searchFundamentals && (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
+        {[
+          ["PE Ratio",       searchFundamentals.pe_ratio?.toFixed(2),                    T.accent],
+          ["Forward PE",     searchFundamentals.forward_pe?.toFixed(2),                  T.accent],
+          ["EPS",            searchFundamentals.eps != null ? `$${searchFundamentals.eps.toFixed(2)}` : null, T.green ],
+          ["Dividend Yield", fmtPct(searchFundamentals.dividend_yield),                   T.green ],
+          ["Market Cap",     fmt(searchFundamentals.market_cap),                         T.accent],
+          ["Revenue",        fmt(searchFundamentals.revenue),                            T.accent],
+          ["Profit Margin",  fmtPct(searchFundamentals.profit_margin),                    T.green ],
+          ["Beta",           searchFundamentals.beta?.toFixed(3),                        searchFundamentals.beta > 1.5 ? T.red : searchFundamentals.beta > 1 ? T.amber : T.green],
+        ].map(([label, val, col]) => (
+          <div key={label} style={{ background: T.surface, borderRadius: 8, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", marginBottom: 4, letterSpacing: "0.05em" }}>{label}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: col }}>{val ?? "N/A"}</div>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* Chart */}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>
+          Price Chart
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[["1wk","1W"],["1mo","1M"],["3mo","3M"],["6mo","6M"],["1y","1Y"]].map(([val, label]) => (
+            <button key={val} onClick={() => setSearchPeriod(val)}
+              style={{ ...s.navItem, ...(searchPeriod === val ? s.navItemActive : {}), fontSize: 11, padding: "3px 9px" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {searchChart.length > 0 ? (
+        <>
+          {/* Price + EMA */}
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={searchChart}>
+              <defs>
+                <linearGradient id="searchGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={T.accent} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={T.accent} stopOpacity={0}    />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }}
+                tickFormatter={d => d?.slice(5,10)}
+                interval={tickInterval(searchChart.length)} />
+              <YAxis domain={["auto","auto"]} tick={{ fontSize: 10, fill: T.muted }}
+                tickFormatter={v => `$${v}`} width={55} />
+              <Tooltip
+                contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }}
+                formatter={(v, name) => [`$${Number(v).toFixed(2)}`, name === "close" ? "Price" : name === "ema20" ? "EMA 20" : "EMA 50"]}
+                labelFormatter={l => l?.slice(0,10)} />
+              <Area type="monotone" dataKey="close"  stroke={T.accent}  fill="url(#searchGrad)" strokeWidth={2}   dot={false} />
+              <Line type="monotone" dataKey="ema20"  stroke="#a78bfa"   strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+              <Line type="monotone" dataKey="ema50"  stroke="#60a5fa"   strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+            </ComposedChart>
+          </ResponsiveContainer>
+
+          {/* RSI */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 }}>
+              RSI (14) — {searchChart[searchChart.length-1]?.rsi?.toFixed(2) ?? "—"}
+              {searchChart[searchChart.length-1]?.rsi > 70 && <span style={{ color: T.red,   marginLeft: 8 }}>⚠️ Overbought</span>}
+              {searchChart[searchChart.length-1]?.rsi < 30 && <span style={{ color: T.green, marginLeft: 8 }}>✅ Oversold</span>}
+            </div>
+            <ResponsiveContainer width="100%" height={80}>
+              <ComposedChart data={searchChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                  tickFormatter={d => d?.slice(5,10)}
+                  interval={tickInterval(searchChart.length)} />
+                <YAxis domain={[0,100]} tick={{ fontSize: 9, fill: T.muted }} width={28} />
+                <Tooltip
+                  contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                  formatter={v => [v?.toFixed(2), "RSI"]}
+                  labelFormatter={l => l?.slice(0,10)} />
+                <ReferenceLine y={70} stroke={T.red}   strokeDasharray="3 3" />
+                <ReferenceLine y={30} stroke={T.green} strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="rsi" stroke={T.amber} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* MACD */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 }}>
+              MACD — {searchChart[searchChart.length-1]?.macd?.toFixed(3) ?? "—"}
+            </div>
+            <ResponsiveContainer width="100%" height={80}>
+              <ComposedChart data={searchChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                  tickFormatter={d => d?.slice(5,10)}
+                  interval={tickInterval(searchChart.length)} />
+                <YAxis tick={{ fontSize: 9, fill: T.muted }} width={35} />
+                <Tooltip
+                  contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                  formatter={(v, name) => [v?.toFixed(4), name === "macd" ? "MACD" : "Signal"]}
+                  labelFormatter={l => l?.slice(0,10)} />
+                <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
+                <Bar dataKey="macd_hist" radius={[2,2,0,0]}>
+                  {searchChart.map((d, i) => (
+                    <Cell key={i} fill={d.macd_hist >= 0 ? T.green : T.red} opacity={0.8} />
+                  ))}
+                </Bar>
+                <Line type="monotone" dataKey="macd"     stroke={T.accent} strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="macd_sig" stroke={T.red}    strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      ) : (
+        <div style={{ textAlign: "center", padding: "32px 0", color: T.muted }}>Loading chart...</div>
       )}
+    </div>
+
+    {/* Description */}
+    {searchFundamentals?.description && (
+      <div style={{ padding: "12px 14px", background: T.surface, borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 12, color: T.muted, lineHeight: 1.6 }}>
+        {searchFundamentals.description}
+      </div>
+    )}
+  </div>
+)}
 
       {/* ── Index Cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 12, marginBottom: 20 }}>
@@ -148,12 +360,15 @@ export default function MarketData() {
 
       {/* ── Stock Chart ── */}
       <div style={{ ...s.card, marginBottom: 20 }}>
+
+        {/* Chart Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={s.h3}>{selSym}</div>
             <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 10 }}>LIVE</span>
+            {histLoading && <span style={{ fontSize: 12, color: T.muted }}>Loading...</span>}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4 }}>
               {CHART_SYMS.map(sym => (
                 <button key={sym} onClick={() => setSelSym(sym)}
@@ -162,7 +377,7 @@ export default function MarketData() {
                 </button>
               ))}
             </div>
-            <div style={{ width: 1, background: T.border }} />
+            <div style={{ width: 1, background: T.border, height: 20 }} />
             <div style={{ display: "flex", gap: 4 }}>
               {CHART_PERIODS.map(([val, label]) => (
                 <button key={val} onClick={() => setSelPeriod(val)}
@@ -171,29 +386,197 @@ export default function MarketData() {
                 </button>
               ))}
             </div>
+            <div style={{ width: 1, background: T.border, height: 20 }} />
+            <button
+              onClick={() => setShowIndicators(p => !p)}
+              style={{ ...s.navItem, ...(showIndicators ? s.navItemActive : {}), fontSize: 11, padding: "3px 9px" }}>
+              📊 Indicators
+            </button>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={history}>
+
+        {/* Latest Indicator Pills */}
+        {latest && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <span style={{ ...s.badge, background: T.surface, color: T.muted, border: `1px solid ${T.border}`, fontSize: 11 }}>
+              Close: <strong style={{ color: T.accent }}>${latest.close}</strong>
+            </span>
+            {latest.ema20 && (
+              <span style={{ ...s.badge, background: T.surface, color: T.muted, border: `1px solid ${T.border}`, fontSize: 11 }}>
+                EMA20: <strong style={{ color: "#a78bfa" }}>${latest.ema20}</strong>
+              </span>
+            )}
+            {latest.ema50 && (
+              <span style={{ ...s.badge, background: T.surface, color: T.muted, border: `1px solid ${T.border}`, fontSize: 11 }}>
+                EMA50: <strong style={{ color: "#60a5fa" }}>${latest.ema50}</strong>
+              </span>
+            )}
+            {latest.rsi && (
+              <span style={{ ...s.badge, background: T.surface, border: `1px solid ${T.border}`, fontSize: 11 }}>
+                RSI: <strong style={{ color: rsiColor }}>{latest.rsi}</strong>
+                <span style={{ color: T.muted, marginLeft: 4 }}>
+                  {latest.rsi > 70 ? "⚠️ Overbought" : latest.rsi < 30 ? "✅ Oversold" : ""}
+                </span>
+              </span>
+            )}
+            {latest.macd != null && (
+              <span style={{ ...s.badge, background: T.surface, border: `1px solid ${T.border}`, fontSize: 11 }}>
+                MACD: <strong style={{ color: macdColor }}>{latest.macd?.toFixed(3)}</strong>
+              </span>
+            )}
+            {latest.bb_upper && (
+              <span style={{ ...s.badge, background: T.surface, color: T.muted, border: `1px solid ${T.border}`, fontSize: 11 }}>
+                BB: <strong style={{ color: T.green }}>${latest.bb_lower}</strong>
+                {" – "}
+                <strong style={{ color: T.red }}>${latest.bb_upper}</strong>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Price + EMA Chart */}
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={history}>
             <defs>
               <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={T.accent} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={T.accent} stopOpacity={0}   />
+                <stop offset="5%"  stopColor={T.accent} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={T.accent} stopOpacity={0}    />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: T.muted }}
               tickFormatter={d => d?.slice(5,10)}
-              interval={Math.floor(history.length / 6)} />
+              interval={tickInterval(history.length)} />
             <YAxis domain={["auto","auto"]} tick={{ fontSize: 10, fill: T.muted }}
-              tickFormatter={v => `$${v}`} />
+              tickFormatter={v => `$${v}`} width={55} />
             <Tooltip
               contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }}
-              formatter={v => [`$${Number(v).toFixed(2)}`, selSym]}
+              formatter={(v, name) => {
+                const labels = { close: "Price", ema20: "EMA 20", ema50: "EMA 50", bb_upper: "BB Upper", bb_lower: "BB Lower" };
+                return [`$${Number(v).toFixed(2)}`, labels[name] || name];
+              }}
               labelFormatter={l => l?.slice(0,10)} />
-            <Area type="monotone" dataKey="close" stroke={T.accent} fill="url(#grad)" strokeWidth={2} dot={false} />
-          </AreaChart>
+            <Area  type="monotone" dataKey="close"    stroke={T.accent}   fill="url(#grad)" strokeWidth={2}   dot={false} />
+            <Line  type="monotone" dataKey="ema20"    stroke="#a78bfa"    strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+            <Line  type="monotone" dataKey="ema50"    stroke="#60a5fa"    strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+            {showIndicators && <>
+              <Line type="monotone" dataKey="bb_upper" stroke={T.red}   strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.7} />
+              <Line type="monotone" dataKey="bb_lower" stroke={T.green} strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.7} />
+              <Line type="monotone" dataKey="bb_mid"   stroke={T.muted} strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.5} />
+            </>}
+          </ComposedChart>
         </ResponsiveContainer>
+
+        {/* RSI + MACD — sirf indicators button on hone pe */}
+        {showIndicators && (
+          <>
+            {/* RSI Chart */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 6, fontWeight: 600 }}>
+                RSI (14)
+                <span style={{ marginLeft: 8, color: rsiColor, fontWeight: 700 }}>
+                  {latest?.rsi ?? "—"}
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 11, color: T.muted }}>
+                  70 = Overbought · 30 = Oversold
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={100}>
+                <ComposedChart data={history}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                    tickFormatter={d => d?.slice(5,10)}
+                    interval={tickInterval(history.length)} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: T.muted }} width={30} />
+                  <Tooltip
+                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={v => [v?.toFixed(2), "RSI"]}
+                    labelFormatter={l => l?.slice(0,10)} />
+                  <ReferenceLine y={70} stroke={T.red}   strokeDasharray="3 3" label={{ value: "70", fill: T.red,   fontSize: 10 }} />
+                  <ReferenceLine y={30} stroke={T.green} strokeDasharray="3 3" label={{ value: "30", fill: T.green, fontSize: 10 }} />
+                  <ReferenceLine y={50} stroke={T.muted} strokeDasharray="2 4" opacity={0.5} />
+                  <Line type="monotone" dataKey="rsi" stroke={T.amber} strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* MACD Chart */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 6, fontWeight: 600 }}>
+                MACD (12, 26, 9)
+                <span style={{ marginLeft: 8, color: macdColor, fontWeight: 700 }}>
+                  {latest?.macd?.toFixed(3) ?? "—"}
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 11, color: T.muted }}>
+                  Signal: {latest?.macd_sig?.toFixed(3) ?? "—"}
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={110}>
+                <ComposedChart data={history}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                    tickFormatter={d => d?.slice(5,10)}
+                    interval={tickInterval(history.length)} />
+                  <YAxis tick={{ fontSize: 9, fill: T.muted }} width={40} />
+                  <Tooltip
+                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(v, name) => [v?.toFixed(4), name === "macd" ? "MACD" : name === "macd_sig" ? "Signal" : "Histogram"]}
+                    labelFormatter={l => l?.slice(0,10)} />
+                  <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
+                  <Bar dataKey="macd_hist" radius={[2,2,0,0]}>
+                    {history.map((d, i) => (
+                      <Cell key={i} fill={d.macd_hist >= 0 ? T.green : T.red} opacity={0.8} />
+                    ))}
+                  </Bar>
+                  <Line type="monotone" dataKey="macd"     stroke={T.accent} strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="macd_sig" stroke={T.red}    strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Volume Chart */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 6, fontWeight: 600 }}>
+                Volume
+                <span style={{ marginLeft: 8, color: T.accent, fontWeight: 700 }}>
+                  {latest?.volume ? (latest.volume / 1e6).toFixed(1) + "M" : "—"}
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={80}>
+                <BarChart data={history}>
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                    tickFormatter={d => d?.slice(5,10)}
+                    interval={tickInterval(history.length)} />
+                  <YAxis tick={{ fontSize: 9, fill: T.muted }} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} width={40} />
+                  <Tooltip
+                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={v => [`${(v/1e6).toFixed(2)}M`, "Volume"]}
+                    labelFormatter={l => l?.slice(0,10)} />
+                  <Bar dataKey="volume" radius={[2,2,0,0]}>
+                    {history.map((d, i) => (
+                      <Cell key={i} fill={i > 0 && d.close >= history[i-1]?.close ? T.green : T.red} opacity={0.7} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 11, color: T.muted, flexWrap: "wrap" }}>
+              {[
+                ["──", T.accent,  "Price"],
+                ["- -", "#a78bfa", "EMA 20"],
+                ["- -", "#60a5fa", "EMA 50"],
+                ["- -", T.red,    "BB Upper"],
+                ["- -", T.green,  "BB Lower"],
+              ].map(([line, col, label]) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: col, fontWeight: 700 }}>{line}</span> {label}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Tabs ── */}
@@ -213,11 +596,10 @@ export default function MarketData() {
         {/* Indices */}
         {tab === "indices" && (
           <table style={s.table}>
-            <thead>
-              <tr>{["Index","Price","Change","Change %","52W High","52W Low"].map(h =>
+            <thead><tr>
+              {["Index","Price","Change","Change %","52W High","52W Low"].map(h =>
                 <th key={h} style={s.th}>{h}</th>)}
-              </tr>
-            </thead>
+            </tr></thead>
             <tbody>
               {indices.map(r => (
                 <tr key={r.symbol}>
@@ -238,15 +620,12 @@ export default function MarketData() {
           <>
             <div style={{ marginBottom: 20 }}>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={sectors.map(sec => ({
-                  name: sec.sector?.split(" ")[0],
-                  val:  sec.change_pct,
-                }))}>
+                <BarChart data={sectors.map(sec => ({ name: sec.sector?.split(" ")[0], val: sec.change_pct }))}>
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: T.muted }} tickFormatter={v => `${v}%`} />
-                  <Tooltip
-                    contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }}
+                  <Tooltip contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }}
                     formatter={v => [`${v}%`, "Change"]} />
+                  <ReferenceLine y={0} stroke={T.border} />
                   <Bar dataKey="val" radius={[4,4,0,0]}>
                     {sectors.map((sec, i) => (
                       <Cell key={i} fill={sec.change_pct >= 0 ? T.green : T.red} />
@@ -256,20 +635,16 @@ export default function MarketData() {
               </ResponsiveContainer>
             </div>
             <table style={s.table}>
-              <thead>
-                <tr>{["Sector","ETF","Price","Change %","Signal"].map(h =>
-                  <th key={h} style={s.th}>{h}</th>)}
-                </tr>
-              </thead>
+              <thead><tr>
+                {["Sector","ETF","Price","Change %","Signal"].map(h => <th key={h} style={s.th}>{h}</th>)}
+              </tr></thead>
               <tbody>
                 {sectors.map(r => (
                   <tr key={r.symbol}>
                     <td style={{ ...s.td, fontWeight: 600 }}>{r.sector}</td>
                     <td style={{ ...s.td, fontFamily: "monospace", color: T.accent }}>{r.symbol}</td>
                     <td style={s.td}>{fmt(r.price)}</td>
-                    <td style={{ ...s.td, color: color(r.change_pct), fontWeight: 600 }}>
-                      {sign(r.change_pct)}{r.change_pct}%
-                    </td>
+                    <td style={{ ...s.td, color: color(r.change_pct), fontWeight: 600 }}>{sign(r.change_pct)}{r.change_pct}%</td>
                     <td style={s.td}>
                       <span style={{ ...s.badge, ...(r.signal?.includes("BUY") ? s.badgeGreen : r.signal === "HOLD" ? s.badgeAmber : s.badgeRed) }}>
                         {r.signal}
@@ -285,20 +660,16 @@ export default function MarketData() {
         {/* Crypto */}
         {tab === "crypto" && (
           <table style={s.table}>
-            <thead>
-              <tr>{["Asset","Symbol","Price","Change %","Signal"].map(h =>
-                <th key={h} style={s.th}>{h}</th>)}
-              </tr>
-            </thead>
+            <thead><tr>
+              {["Asset","Symbol","Price","Change %","Signal"].map(h => <th key={h} style={s.th}>{h}</th>)}
+            </tr></thead>
             <tbody>
               {crypto.map(r => (
                 <tr key={r.symbol}>
                   <td style={{ ...s.td, fontWeight: 600 }}>{r.name}</td>
                   <td style={{ ...s.td, fontFamily: "monospace", color: T.amber }}>{r.symbol}</td>
                   <td style={{ ...s.td, fontWeight: 700 }}>{fmt(r.price)}</td>
-                  <td style={{ ...s.td, color: color(r.change_pct), fontWeight: 600 }}>
-                    {sign(r.change_pct)}{r.change_pct}%
-                  </td>
+                  <td style={{ ...s.td, color: color(r.change_pct), fontWeight: 600 }}>{sign(r.change_pct)}{r.change_pct}%</td>
                   <td style={s.td}>
                     <span style={{ ...s.badge, ...(r.signal?.includes("BUY") ? s.badgeGreen : r.signal === "HOLD" ? s.badgeAmber : s.badgeRed) }}>
                       {r.signal}
@@ -313,11 +684,9 @@ export default function MarketData() {
         {/* Gainers */}
         {tab === "gainers" && (
           <table style={s.table}>
-            <thead>
-              <tr>{["Symbol","Price","Change %","Signal"].map(h =>
-                <th key={h} style={s.th}>{h}</th>)}
-              </tr>
-            </thead>
+            <thead><tr>
+              {["Symbol","Price","Change %","Signal"].map(h => <th key={h} style={s.th}>{h}</th>)}
+            </tr></thead>
             <tbody>
               {(movers.top_gainers || []).map(r => (
                 <tr key={r.symbol}>
@@ -334,11 +703,9 @@ export default function MarketData() {
         {/* Losers */}
         {tab === "losers" && (
           <table style={s.table}>
-            <thead>
-              <tr>{["Symbol","Price","Change %","Signal"].map(h =>
-                <th key={h} style={s.th}>{h}</th>)}
-              </tr>
-            </thead>
+            <thead><tr>
+              {["Symbol","Price","Change %","Signal"].map(h => <th key={h} style={s.th}>{h}</th>)}
+            </tr></thead>
             <tbody>
               {(movers.top_losers || []).map(r => (
                 <tr key={r.symbol}>
@@ -355,21 +722,12 @@ export default function MarketData() {
         {/* ML Signals */}
         {tab === "ml signals" && (
           <div>
-            {/* ML Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  🤖 NexaGuard ML — Stock Signal Scanner
-                </div>
-                <div style={{ fontSize: 12, color: T.muted }}>
-                  XGBoost model · 2-day forward return prediction · 16 technical features
-                </div>
-                <div style={{ fontSize: 11, color: T.amber, marginTop: 4 }}>
-                  ⚠️ Model accuracy 53.3% — sirf HIGH confidence signals consider karein
-                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>🤖 NexaGuard ML — Stock Signal Scanner</div>
+                <div style={{ fontSize: 12, color: T.muted }}>XGBoost model · 2-day forward return prediction · 16 technical features</div>
               </div>
-              <button onClick={loadMLSignals}
-                style={{ ...s.navItem, ...s.navItemActive, fontSize: 12, padding: "6px 14px" }}>
+              <button onClick={loadMLSignals} style={{ ...s.navItem, ...s.navItemActive, fontSize: 12, padding: "6px 14px" }}>
                 ↻ Re-scan Market
               </button>
             </div>
@@ -378,13 +736,13 @@ export default function MarketData() {
             {!mlLoading && mlSignals.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
                 {[
-                  ["🟢 Strong Buy", mlBuy.length,    T.green, "HIGH confidence BUY"],
-                  ["🟡 Buy",        mlMedBuy.length, T.green, "MEDIUM confidence BUY"],
+                  ["🟢 Strong Buy", mlBuy.length,    T.green, "HIGH confidence"],
+                  ["🟡 Buy",        mlMedBuy.length, T.green, "MEDIUM confidence"],
                   ["⏸ Hold",        mlHold.length,   T.amber, "Wait & watch"],
                   ["🔴 Sell",       mlSell.length,   T.red,   "Bearish signal"],
                 ].map(([label, count, col, sub]) => (
                   <div key={label} style={{ background: T.surface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${T.border}`, borderTop: `3px solid ${col}` }}>
-                    <div style={{ fontSize: 11, color: T.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                    <div style={{ fontSize: 11, color: T.muted, marginBottom: 6, textTransform: "uppercase" }}>{label}</div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: col, lineHeight: 1 }}>{count}</div>
                     <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{sub}</div>
                   </div>
@@ -401,7 +759,7 @@ export default function MarketData() {
               </div>
             )}
 
-            {/* Not scanned yet */}
+            {/* Not scanned */}
             {!mlLoading && !mlScanned && (
               <div style={{ textAlign: "center", padding: "48px 0" }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>📡</div>
@@ -412,11 +770,10 @@ export default function MarketData() {
             {/* Table */}
             {!mlLoading && mlSignals.length > 0 && (
               <table style={s.table}>
-                <thead>
-                  <tr>{["Symbol","Price","ML Signal","UP Prob","Confidence","Strength","Action"].map(h =>
+                <thead><tr>
+                  {["Symbol","Price","ML Signal","UP Prob","Confidence","Strength","Action"].map(h =>
                     <th key={h} style={s.th}>{h}</th>)}
-                  </tr>
-                </thead>
+                </tr></thead>
                 <tbody>
                   {mlSignals.map(r => {
                     const prob   = parseFloat(r.up_prob) || 0;
@@ -425,23 +782,16 @@ export default function MarketData() {
                     const isHigh = r.confidence === "HIGH";
                     const isMed  = r.confidence === "MEDIUM";
                     const barCol = prob >= 65 ? T.green : prob >= 55 ? T.amber : T.muted;
-
                     return (
                       <tr key={r.symbol}>
-                        <td style={{ ...s.td, fontWeight: 700, color: T.accent, fontFamily: "monospace", fontSize: 14 }}>
-                          {r.symbol}
-                        </td>
-                        <td style={{ ...s.td, fontWeight: 600 }}>
-                          ${Number(r.price).toFixed(2)}
-                        </td>
+                        <td style={{ ...s.td, fontWeight: 700, color: T.accent, fontFamily: "monospace", fontSize: 14 }}>{r.symbol}</td>
+                        <td style={{ ...s.td, fontWeight: 600 }}>${Number(r.price).toFixed(2)}</td>
                         <td style={s.td}>
                           <span style={{ ...s.badge, ...(isBuy ? s.badgeGreen : isSell ? s.badgeRed : s.badgeAmber) }}>
                             {r.signal}
                           </span>
                         </td>
-                        <td style={{ ...s.td, fontWeight: 700, color: barCol, fontSize: 14 }}>
-                          {prob.toFixed(1)}%
-                        </td>
+                        <td style={{ ...s.td, fontWeight: 700, color: barCol, fontSize: 14 }}>{prob.toFixed(1)}%</td>
                         <td style={s.td}>
                           <span style={{ ...s.badge, ...(isHigh ? s.badgeGreen : isMed ? s.badgeAmber : s.badgeRed), fontSize: 11 }}>
                             {r.confidence}
@@ -452,17 +802,15 @@ export default function MarketData() {
                             <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.border, overflow: "hidden" }}>
                               <div style={{ width: `${prob}%`, height: "100%", borderRadius: 3, background: barCol, transition: "width 0.4s ease" }} />
                             </div>
-                            <span style={{ fontSize: 11, color: T.muted, minWidth: 28, textAlign: "right" }}>
-                              {prob.toFixed(0)}%
-                            </span>
+                            <span style={{ fontSize: 11, color: T.muted, minWidth: 28, textAlign: "right" }}>{prob.toFixed(0)}%</span>
                           </div>
                         </td>
                         <td style={s.td}>
-                          {isBuy  && isHigh ? <span style={{ color: T.green, fontWeight: 700, fontSize: 13 }}>🟢 Strong Buy</span>
-                         : isBuy  && isMed  ? <span style={{ color: T.green, fontSize: 13             }}>🟢 Buy</span>
-                         : isSell && isHigh ? <span style={{ color: T.red,   fontWeight: 700, fontSize: 13 }}>🔴 Strong Sell</span>
-                         : isSell           ? <span style={{ color: T.red,   fontSize: 13             }}>🔴 Sell</span>
-                         :                   <span style={{ color: T.muted,  fontSize: 13             }}>🟡 Hold</span>}
+                          {isBuy  && isHigh ? <span style={{ color: T.green, fontWeight: 700 }}>🟢 Strong Buy</span>
+                         : isBuy  && isMed  ? <span style={{ color: T.green             }}>🟢 Buy</span>
+                         : isSell && isHigh ? <span style={{ color: T.red,   fontWeight: 700 }}>🔴 Strong Sell</span>
+                         : isSell           ? <span style={{ color: T.red               }}>🔴 Sell</span>
+                         :                   <span style={{ color: T.muted              }}>🟡 Hold</span>}
                         </td>
                       </tr>
                     );
@@ -471,12 +819,12 @@ export default function MarketData() {
               </table>
             )}
 
-            {/* Footer note */}
+            {/* Disclaimer */}
             {!mlLoading && mlSignals.length > 0 && (
               <div style={{ marginTop: 14, padding: "10px 14px", background: T.surface, borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>
-                🛡️ <strong>Disclaimer:</strong> ML predictions are based on historical patterns. Not financial advice. 
-                Model: XGBoost · Accuracy: 53.3% · Train data: 5 years · Features: 16 technical indicators.
-                Improve accuracy: <code style={{ background: T.border, padding: "1px 5px", borderRadius: 3 }}>model hybrid</code>
+                🛡️ <strong>Disclaimer:</strong> ML predictions are based on historical patterns. Not financial advice.
+                Model: XGBoost · Accuracy: 53.3% · Train: 5 years · Features: 16 indicators.
+                Improve: <code style={{ background: T.border, padding: "1px 5px", borderRadius: 3 }}>python ml/train.py --model hybrid</code>
               </div>
             )}
           </div>
