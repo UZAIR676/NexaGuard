@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.ai_advisor import router as ai_router
 from services.lstm_predictor import router as ml_router
 from routes.csv_scanner import router as csv_router
+from routes.ml import router as ml_router
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
     get_all_sectors, get_market_movers, get_stock_history,
@@ -15,6 +17,8 @@ from services.technical_indicators import router as technical_router
 from routes.alerts import router as alerts_router
 
 app = FastAPI(title="NexaGuard API", version="1.0.0")
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +34,7 @@ app.include_router(technical_router)
 app.include_router(ml_router)
 app.include_router(csv_router)
 app.include_router(alerts_router)
+app.include_router(ml_router)
 # Market endpoints
 @app.get("/api/market/summary")
 def market_summary():

@@ -14,6 +14,7 @@ export default function AdminPanel({ user }) {
 
   const token = localStorage.getItem("ng_token");
   const pendingTxns = txns.filter(t => t.status === "pending");
+  const isAdmin = user.role === "admin";
 
   const reviewTransaction = async (txnId, action) => {
     setMsg("");
@@ -83,6 +84,24 @@ export default function AdminPanel({ user }) {
         loadUsers();
       } else {
         setMsg(`❌ ${data.detail || "Delete failed"}`);
+      }
+    } catch { setMsg("❌ Server error"); }
+  };
+
+  const unholdUser = async (userId, userName) => {
+    setMsg("");
+    try {
+      const res = await fetch(`${BASE}/api/auth/admin/unhold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`✅ ${userName}'s account cleared from hold`);
+        loadUsers();
+      } else {
+        setMsg(`❌ ${data.detail || "Unhold failed"}`);
       }
     } catch { setMsg("❌ Server error"); }
   };
@@ -157,7 +176,7 @@ export default function AdminPanel({ user }) {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {["ID", "Name", "Email", "Role", "Balance", "Joined", "Change Role"].map(h => (
+                  {["ID", "Name", "Email", "Role", "Status", "Balance", "Joined", "Change Role"].map(h => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
@@ -172,6 +191,21 @@ export default function AdminPanel({ user }) {
                       <span style={{ ...s.badge, ...roleColor(u.role) }}>
                         {u.role.toUpperCase()}
                       </span>
+                    </td>
+                    <td style={s.td}>
+                      {u.held ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ ...s.badge, background: "rgba(239,68,68,0.15)", color: T.red }}>🔒 ON HOLD</span>
+                          {isAdmin && (
+                            <button onClick={() => unholdUser(u.id, u.name)}
+                              style={{ ...s.navItem, fontSize: 11, padding: "3px 8px", color: T.green, borderColor: "rgba(34,197,94,0.3)" }}>
+                              🔓 Unhold
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ ...s.badge, background: "rgba(34,197,94,0.15)", color: T.green }}>Active</span>
+                      )}
                     </td>
                     <td style={{ ...s.td, fontWeight: 600, color: T.green }}>
                       ${parseFloat(u.balance || 0).toLocaleString()}

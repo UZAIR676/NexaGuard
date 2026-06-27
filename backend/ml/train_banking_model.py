@@ -8,7 +8,7 @@ import pickle
 from pathlib import Path
 
 np.random.seed(42)
-N = 8000
+N = 50000
 
 MODELS_DIR = Path(__file__).parent.parent / "models"
 MODELS_DIR.mkdir(exist_ok=True)
@@ -47,7 +47,7 @@ def generate_dataset(n=N):
         risk += 20 if account_age_days < 3 else (8 if account_age_days < 14 else 0)
         risk += 10 if tx_type in ["send", "withdraw"] else -5
 
-        risk += np.random.normal(0, 12)  # noise so it's not a pure lookup table
+        risk += np.random.normal(0, 25)  
         is_fraud = 1 if risk > 55 else 0
 
         rows.append({
@@ -70,18 +70,21 @@ def main():
     df = generate_dataset()
     print(f"Dataset shape: {df.shape}, fraud rate: {df['is_fraud'].mean():.3f}")
 
+     
     feature_cols = [
-        "amount", "amount_to_balance_ratio", "is_new_recipient",
-        "tx_count_last_24h", "hour_of_day", "is_round_number",
-        "account_age_days", "is_outgoing",
+    "amount",
+    "hour_of_day",
+    "is_round_number",
+    "account_age_days",
+    "is_outgoing",
     ]
     X = df[feature_cols]
     y = df["is_fraud"]
 
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X[["amount", "amount_to_balance_ratio", "account_age_days"]])
+    X_scaled = scaler.fit_transform(X[["amount", "account_age_days"]])
     X_full = X.copy()
-    X_full[["amount", "amount_to_balance_ratio", "account_age_days"]] = X_scaled
+    X_full[["amount", "account_age_days"]] = X_scaled
 
     X_train, X_test, y_train, y_test = train_test_split(X_full, y, test_size=0.2, random_state=42, stratify=y)
 
