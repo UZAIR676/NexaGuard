@@ -1,42 +1,100 @@
-# Environment variables - NEVER commit!
+# ==========================
+# Environment Variables
+# ==========================
 .env
-.env.local
+.env.*
+!.env.example
 
+# ==========================
 # Database
+# ==========================
 *.db
+*.sqlite
+*.sqlite3
 
+# ==========================
 # Python
+# ==========================
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
 .Python
 venv/
 env/
+.venv/
+*.egg-info/
 
-# ML Models (large files)
+# ==========================
+# Machine Learning
+# ==========================
 *.pkl
 *.h5
 *.keras
 models/
 
-# Node
+# ==========================
+# Node.js
+# ==========================
 node_modules/
 dist/
 build/
+out/
 .vite/
+.parcel-cache/
+.cache/
 
+# ==========================
 # Logs
+# ==========================
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# OS
-.DS_Store
-Thumbs.db
+# ==========================
+# Coverage
+# ==========================
+coverage/
+.nyc_output/
 
+# ==========================
+# TypeScript
+# ==========================
+*.tsbuildinfo
+
+# ==========================
 # IDE
+# ==========================
 .vscode/
 .idea/
 
-# Images in wrong place
+# ==========================
+# Operating System
+# ==========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================
+# Temporary Files
+# ==========================
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# ==========================
+# Netlify
+# ==========================
+.netlify/
+
+# ==========================
+# Ignore images accidentally placed in pages
+# ==========================
 src/pages/*.png
 src/pages/*.jpg
+src/pages/*.jpeg
+src/pages/*.webp
