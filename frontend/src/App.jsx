@@ -13,7 +13,7 @@ import Banking from "./pages/Banking";
 import AIAdvisor from "./pages/AIAdvisor";
 import CSVScanner from "./pages/CSVScanner";
 function Nav({ user, page, setPage }) {
-const basePages = ["Dashboard", "Banking", "Fraud Detection", "Market Data", "AI Advisor", "Alerts", "Settings"];
+const basePages = ["Dashboard", "Banking", "Market Data", "AI Advisor", "Alerts", "Settings"];
   const isStaff = user.role === "admin" || user.role === "analyst";
   const extraPages = isStaff ? ["CSV Scanner", "Admin Panel"] : [];
   const allPages = [...basePages, ...extraPages];
@@ -98,7 +98,6 @@ export default function App() {
   const pages = {
     "Dashboard":       <Dashboard user={user} />,
     "Banking":         <Banking user={user} onBalanceUpdate={handleBalanceUpdate} />,
-    "Fraud Detection": <FraudDetection />,
     "Market Data":     <MarketData />,
     "Alerts":          <Alerts user={user} />,
     "Settings":        <Settings user={user} />,

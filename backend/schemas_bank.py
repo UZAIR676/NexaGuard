@@ -7,6 +7,7 @@ class TransactionIn(BaseModel):
     amount: float
     to_email: str = ""
     description: str = ""
+    face_verified: bool = False
 
 # ── Admin ──────────────────────────────────────────────────────────────────
 class RoleUpdateIn(BaseModel):

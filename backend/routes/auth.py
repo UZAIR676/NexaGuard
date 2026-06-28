@@ -12,6 +12,10 @@ import geoip2.database
 
 GEOIP_DB = os.path.join(os.path.dirname(__file__), "..", "geoip", "GeoLite2-City.mmdb")
 
+# ── Daily Limits ───────────────────────────────────────────────────────────
+DAILY_LIMIT_SEND_WITHDRAW = 5000
+DAILY_LIMIT_DEPOSIT       = 10000
+
 def get_ip_location(ip: str):
     try:
         with geoip2.database.Reader(GEOIP_DB) as reader:
@@ -24,10 +28,10 @@ def get_ip_location(ip: str):
             }
     except Exception:
         return None
+
 import math
 
 def haversine_km(lat1, lon1, lat2, lon2):
-    """Do locations ke beech distance km mein."""
     R = 6371
     d_lat = math.radians(lat2 - lat1)
     d_lon = math.radians(lon2 - lon1)
@@ -37,8 +41,6 @@ def haversine_km(lat1, lon1, lat2, lon2):
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 DB = os.path.join(os.path.dirname(__file__), "..", "nexaguard.db")
 
-# Base URL used to build the confirm-transaction link sent in emails.
-# Change this if your backend runs on a different host/port in production.
 BACKEND_BASE_URL = os.environ.get("NEXAGUARD_BACKEND_URL", "http://localhost:8000")
 CONFIRM_TOKEN_EXPIRY_MINUTES = 30
 
@@ -84,20 +86,19 @@ def init_db():
     """)
     con.commit()
 
-    # Migrations
     migrations = [
         "ALTER TABLE users ADD COLUMN held INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN held_reason TEXT",
         "ALTER TABLE transactions ADD COLUMN ip TEXT",
-        "ALTER TABLE transactions ADD COLUMN confirm_token TEXT",      # ← naya
-        "ALTER TABLE transactions ADD COLUMN confirm_expires TEXT",    # ← naya
+        "ALTER TABLE transactions ADD COLUMN confirm_token TEXT",
+        "ALTER TABLE transactions ADD COLUMN confirm_expires TEXT",
     ]
     for sql in migrations:
         try:
             con.execute(sql)
             con.commit()
         except sqlite3.OperationalError:
-            pass  # column already exists
+            pass
 
     con.close()
 
@@ -114,7 +115,6 @@ def get_user_by_token(token):
     return {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "balance": row[4], "held": bool(row[5])}
 
 def confirm_transaction_email(name, txn_type, amount, confirm_link, expires_minutes):
-    """Inline email template for the click-to-confirm pending transaction flow."""
     return f"""
     <div style="font-family:Arial,sans-serif;background:#0f1420;padding:32px;color:#e5e7eb;">
       <div style="max-width:480px;margin:0 auto;background:#161c2d;border-radius:14px;padding:32px;border:1px solid rgba(255,255,255,0.08);">
@@ -127,7 +127,7 @@ def confirm_transaction_email(name, txn_type, amount, confirm_link, expires_minu
             ✅ Confirm Transaction
           </a>
         </p>
-        <p style="font-size:13px;color:#9ca3af;">This link expires in {expires_minutes} minutes. If you didn't request this transaction, ignore this email and your account will remain safe — nothing happens until you click confirm.</p>
+        <p style="font-size:13px;color:#9ca3af;">This link expires in {expires_minutes} minutes. If you didn't request this transaction, ignore this email — nothing happens until you click confirm.</p>
       </div>
     </div>
     """
@@ -145,7 +145,6 @@ class ResendOTPIn(BaseModel):
 def signup(body: SignupIn):
     con = get_db()
     try:
-        # Check email exists
         existing = con.execute("SELECT id, verified FROM users WHERE email=?", (body.email.lower().strip(),)).fetchone()
         if existing:
             if existing[1] == 0:
@@ -153,14 +152,13 @@ def signup(body: SignupIn):
             raise HTTPException(400, "Email already registered")
 
         token = secrets.token_hex(32)
-        STARTING_BALANCE = 0.00  # change this number to set what new signups start with
+        STARTING_BALANCE = 0.00
         con.execute(
             "INSERT INTO users (name, email, password, token, role, balance, verified) VALUES (?,?,?,?,?,?,?)",
             (body.name.strip(), body.email.lower().strip(), hash_pw(body.password), token, "user", STARTING_BALANCE, 0)
         )
         con.commit()
 
-        # Generate & send OTP
         otp = generate_otp()
         expires = (datetime.now() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
         con.execute("INSERT INTO otp_codes (email, otp, expires_at) VALUES (?,?,?)",
@@ -190,15 +188,11 @@ def verify_otp(body: OTPVerifyIn):
         if row[1] != body.otp:
             raise HTTPException(400, "Invalid OTP.")
 
-        # Mark OTP used + activate user
         con.execute("UPDATE otp_codes SET used=1 WHERE id=?", (row[0],))
         con.execute("UPDATE users SET verified=1 WHERE email=?", (body.email.lower(),))
         con.commit()
 
-        # Return user + token
         user = con.execute("SELECT id,name,email,token,role,balance FROM users WHERE email=?", (body.email.lower(),)).fetchone()
-
-        # Send welcome email
         send_email(body.email, "Welcome to NexaGuard! 🛡️", welcome_email(user[1]))
 
         return {"token": user[3], "user": {"id": user[0], "name": user[1], "email": user[2], "role": user[4], "balance": user[5]}}
@@ -236,9 +230,7 @@ def login(body: LoginIn):
         token = secrets.token_hex(32)
         con.execute("UPDATE users SET token=? WHERE id=?", (token, row[0]))
         con.commit()
-        # Login alert — user apne account ka login activity dekh sake
         from routes.alerts import create_alert
-        from datetime import datetime
         login_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
         create_alert(row[0], row[2], "info", "login",
                     f"Someone logged into your account on {login_time}",
@@ -282,12 +274,10 @@ def update_role(body: RoleUpdateIn):
     if body.role not in ["user", "analyst", "admin"]:
         raise HTTPException(400, "Invalid role")
     con = get_db()
-    # Get target user info for alert
     target = con.execute("SELECT id, email, role FROM users WHERE id=?", (body.user_id,)).fetchone()
     con.execute("UPDATE users SET role=? WHERE id=?", (body.role, body.user_id))
     con.commit()
     con.close()
-    # Alert — admin sees it, target user also sees it
     from routes.alerts import create_alert
     if target:
         old_role = target[2]
@@ -298,7 +288,6 @@ def update_role(body: RoleUpdateIn):
 
 # ── Transactions ───────────────────────────────────────────────────────────
 def _build_risk_features(con, user, body):
-    """Real-time, server-side features for the banking fraud model — never trust the client for these."""
     is_new_recipient = 0
     if body.type == "send" and body.to_email:
         prior = con.execute(
@@ -337,11 +326,11 @@ def make_transaction(body: TransactionIn, request: Request):
     try:
         from routes.alerts import create_alert
 
-        # ── If account is already held, block everything until admin clears it ──
+        # ── Account hold check ─────────────────────────────────────────────
         if user["held"]:
             raise HTTPException(403, "Your account is on hold pending review. Contact support or wait for admin clearance.")
 
-        # ── Validate recipient exists before doing anything else ──
+        # ── Recipient validation ───────────────────────────────────────────
         if body.type == "send" and body.to_email:
             recipient_check = con.execute("SELECT id FROM users WHERE email=?", (body.to_email.lower().strip(),)).fetchone()
             if not recipient_check:
@@ -349,7 +338,7 @@ def make_transaction(body: TransactionIn, request: Request):
             if body.to_email.lower().strip() == user["email"].lower():
                 raise HTTPException(400, "You cannot send money to yourself")
 
-        # ── Smart Velocity Check (IP + Amount + ML history) ──────────────
+        # ── Velocity check ────────────────────────────────────────────────
         client_ip = request.headers.get("X-Forwarded-For", request.client.host).split(",")[0].strip()
 
         recent_rows = con.execute(
@@ -369,13 +358,12 @@ def make_transaction(body: TransactionIn, request: Request):
         )
         total_recent_amount = sum(r[0] for r in recent_rows)
 
-        # Dynamic limit: ML score + amount history ke basis pe
         if avg_recent_fraud > 50:
-            tx_limit = 3       # already risky history → very strict
+            tx_limit = 3
         elif total_recent_amount > 50000:
-            tx_limit = 5       # badi amounts → moderate strict
+            tx_limit = 5
         else:
-            tx_limit = 10      # normal usage
+            tx_limit = 10
 
         if recent_count >= tx_limit or ip_count >= 15:
             con.execute("UPDATE users SET held=1 WHERE id=?", (user["id"],))
@@ -386,7 +374,8 @@ def make_transaction(body: TransactionIn, request: Request):
                         f"Account held — velocity limit hit (count={recent_count}, ip_count={ip_count}, avg_fraud={avg_recent_fraud:.1f}%)",
                         {"recent_count": recent_count, "ip_count": ip_count, "avg_fraud": avg_recent_fraud})
             raise HTTPException(403, "Suspicious activity detected. Account placed on hold.")
-    # ── Location Change Check ──────────────────────
+
+        # ── Location / impossible travel check ────────────────────────────
         new_location = get_ip_location(client_ip)
         if new_location:
             last_tx_row = con.execute(
@@ -396,21 +385,17 @@ def make_transaction(body: TransactionIn, request: Request):
 
             if last_tx_row and last_tx_row[0]:
                 last_location = get_ip_location(last_tx_row[0])
-
                 if last_location and (last_location["lat"] != 0 and new_location["lat"] != 0):
                     distance_km = haversine_km(
                         last_location["lat"], last_location["lon"],
                         new_location["lat"], new_location["lon"]
                     )
-
-                    # Time difference
                     try:
                         last_time = datetime.strptime(last_tx_row[1][:19], "%Y-%m-%d %H:%M:%S")
                         hours_passed = max((datetime.utcnow() - last_time).total_seconds() / 3600, 0.001)
                     except:
                         hours_passed = 1
 
-                    # Max speed: 900 km/h (plane)
                     max_possible_km = hours_passed * 900
 
                     if distance_km > max_possible_km and distance_km > 500:
@@ -430,12 +415,46 @@ def make_transaction(body: TransactionIn, request: Request):
                         raise HTTPException(403,
                             f"Impossible travel detected: {last_location['city'] or last_location['country']} → {new_location['city'] or new_location['country']} "
                             f"({distance_km:.0f} km in {hours_passed*60:.1f} mins). Account placed on hold.")
-        # ── End Location Check ────────────────────────
-        ml_result = predict_banking_fraud(_build_risk_features(con, user, body))
+
+        # ── ML Fraud Score ────────────────────────────────────────────────
+        ml_result   = predict_banking_fraud(_build_risk_features(con, user, body))
         fraud_score = ml_result["fraud_score"]
 
-        # ── Tier 1: High risk → block outright ──
-        if fraud_score > 70:
+        # ── Daily limit check ─────────────────────────────────────────────
+        today_start = datetime.utcnow().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).strftime("%Y-%m-%d %H:%M:%S")
+
+        if body.type in ["send", "withdraw"]:
+            daily_out = con.execute(
+                """SELECT COALESCE(SUM(amount),0) FROM transactions
+                   WHERE user_id=? AND type IN ('send','withdraw')
+                   AND status != 'blocked'
+                   AND created_at >= ?""",
+                (user["id"], today_start)
+            ).fetchone()[0]
+            if daily_out + body.amount > DAILY_LIMIT_SEND_WITHDRAW:
+                remaining = max(0, DAILY_LIMIT_SEND_WITHDRAW - daily_out)
+                raise HTTPException(400,
+                    f"Daily send/withdraw limit of ${DAILY_LIMIT_SEND_WITHDRAW:,} reached. "
+                    f"Remaining today: ${remaining:,.2f}")
+
+        elif body.type == "deposit":
+            daily_dep = con.execute(
+                """SELECT COALESCE(SUM(amount),0) FROM transactions
+                   WHERE user_id=? AND type='deposit'
+                   AND status != 'blocked'
+                   AND created_at >= ?""",
+                (user["id"], today_start)
+            ).fetchone()[0]
+            if daily_dep + body.amount > DAILY_LIMIT_DEPOSIT:
+                remaining = max(0, DAILY_LIMIT_DEPOSIT - daily_dep)
+                raise HTTPException(400,
+                    f"Daily deposit limit of ${DAILY_LIMIT_DEPOSIT:,} reached. "
+                    f"Remaining today: ${remaining:,.2f}")
+
+        # ── Tier 1: High risk → block UNLESS face was verified ────────────
+        if fraud_score > 70 and not body.face_verified:
             con.execute(
                 "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score,ip) VALUES (?,?,?,?,?,?,?,?)",
                 (user["id"], body.type, body.amount, body.to_email, body.description, "blocked", fraud_score, client_ip)
@@ -448,8 +467,8 @@ def make_transaction(body: TransactionIn, request: Request):
                         {"amount": body.amount, "type": body.type, "fraud_score": fraud_score})
             return {"success": False, "status": "blocked", "reason": "High fraud risk detected", "fraud_score": fraud_score}
 
-        # ── Tier 2: Medium risk → email user a confirm link (admin review bypassed) ──
-        if fraud_score >= 40:
+        # ── Tier 2: Medium risk → email confirm (only if face NOT verified) ─
+        if fraud_score >= 40 and not body.face_verified:
             cursor = con.execute(
                 "INSERT INTO transactions (user_id,type,amount,to_email,description,status,fraud_score,ip) VALUES (?,?,?,?,?,?,?,?)",
                 (user["id"], body.type, body.amount, body.to_email, body.description, "pending", fraud_score, client_ip)
@@ -472,7 +491,7 @@ def make_transaction(body: TransactionIn, request: Request):
                         {"amount": body.amount, "type": body.type, "fraud_score": fraud_score})
             return {"success": True, "status": "pending", "reason": "Check your email to confirm this transaction", "fraud_score": fraud_score}
 
-        # ── Tier 3: Low risk → auto-approve ──
+        # ── Tier 3: Auto-approve (low risk OR face verified override) ──────
         if body.type in ["send", "withdraw"]:
             if user["balance"] < body.amount:
                 raise HTTPException(400, "Insufficient balance")
@@ -492,8 +511,10 @@ def make_transaction(body: TransactionIn, request: Request):
         send_email(user["email"], "✅ NexaGuard — Transaction Confirmed",
             transaction_email(user["name"], body.type, body.amount, "completed", new_balance))
         create_alert(user["id"], user["email"], "success", "transaction",
-                    f"Transaction completed — ${body.amount:,.2f} {body.type}",
-                    {"amount": body.amount, "type": body.type, "new_balance": round(new_balance, 2)})
+                    f"Transaction completed — ${body.amount:,.2f} {body.type}"
+                    + (" (face-verified override)" if body.face_verified else ""),
+                    {"amount": body.amount, "type": body.type, "new_balance": round(new_balance, 2),
+                     "face_verified": body.face_verified})
 
         if body.type == "send" and body.to_email:
             recipient = con.execute("SELECT id, name, email, balance FROM users WHERE email=?", (body.to_email.lower(),)).fetchone()
@@ -511,8 +532,6 @@ def make_transaction(body: TransactionIn, request: Request):
 
 @router.get("/confirm-transaction", response_class=HTMLResponse)
 def confirm_transaction(ctoken: str):
-    """User clicks the link from their email to confirm a medium-risk (pending) transaction.
-    Admin review is bypassed entirely for this path."""
     con = get_db()
     try:
         from routes.alerts import create_alert
@@ -597,8 +616,6 @@ class ReviewIn(BaseModel):
 
 @router.post("/admin/review")
 def review_transaction(body: ReviewIn):
-    """Admin/analyst fallback override — approves or rejects a still-pending transaction
-    in case the user never clicks their email confirm link."""
     user = get_user_by_token(body.token)
     if user["role"] not in ["admin", "analyst"]:
         raise HTTPException(403, "Only admin or analyst can review transactions")
@@ -662,8 +679,7 @@ def review_transaction(body: ReviewIn):
 
 
 @router.get("/admin/banking-stats")
-def banking_stats(token: str):
-    """Real fraud-monitoring stats computed from actual banking transactions (not the old test-log feed)."""
+def banking_stats_admin(token: str):
     user = get_user_by_token(token)
     if user["role"] not in ["admin", "analyst"]:
         raise HTTPException(403, "Access denied")
@@ -695,7 +711,6 @@ def banking_stats(token: str):
 
 @router.get("/banking-stats")
 def banking_stats(token: str):
-    """Real fraud stats computed from actual banking transactions (not the old test-feed)."""
     user = get_user_by_token(token)
     if user["role"] not in ["admin", "analyst"]:
         raise HTTPException(403, "Access denied")
@@ -744,14 +759,14 @@ def get_transactions(token: str):
         """, (user["id"],)).fetchall()
         return [{"id":r[0],"type":r[1],"amount":r[2],"to_email":r[3],"description":r[4],"status":r[5],"fraud_score":r[6],"created_at":r[7]} for r in rows]
 
-# ── Admin — Delete User / Account Hold ─────────────────────────────────────
+
 class DeleteUserIn(BaseModel):
     token: str
     user_id: int
 
 
 @router.post("/admin/unhold")
-def unhold_user(body: DeleteUserIn):  # reuses {token, user_id} shape
+def unhold_user(body: DeleteUserIn):
     admin = get_user_by_token(body.token)
     if admin["role"] not in ["admin", "analyst"]:
         raise HTTPException(403, "Only admin or analyst can release a hold")
@@ -785,7 +800,7 @@ def delete_user(body: DeleteUserIn):
     finally:
         con.close()
 
-# ── User — Update Profile ──────────────────────────────────────────────────
+
 class UpdateProfileIn(BaseModel):
     token: str
     name: str
@@ -800,7 +815,6 @@ def update_profile_full(body: UpdateProfileIn):
         if not body.name.strip():
             raise HTTPException(400, "Name cannot be empty")
 
-        # Password change request
         if body.new_password:
             if len(body.new_password) < 6:
                 raise HTTPException(400, "Password must be at least 6 characters")

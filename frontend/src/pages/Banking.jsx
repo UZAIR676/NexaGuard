@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import FaceVerificationModal from "./FaceVerificationModal";
 import { T, s } from "../theme";
 
 function timeAgo(iso) {
@@ -15,11 +16,16 @@ function timeAgo(iso) {
 
 const BASE = "http://localhost:8000";
 
+const FACE_VERIFY_THRESHOLD = 5000;
+
+// Daily limits (USD)
+const DAILY_LIMIT_SEND_WITHDRAW = 5000;
+const DAILY_LIMIT_DEPOSIT = 10000;
+
 /* ---------------------------------------------------
    Small reusable bits
 --------------------------------------------------- */
 
-// Animated count-up for the balance number
 function useCountUp(value, duration = 600) {
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
@@ -31,7 +37,7 @@ function useCountUp(value, duration = 600) {
     let raf;
     const tick = (now) => {
       const p = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - p, 3);
       setDisplay(from + (to - from) * eased);
       if (p < 1) raf = requestAnimationFrame(tick);
       else fromRef.current = to;
@@ -43,8 +49,6 @@ function useCountUp(value, duration = 600) {
   return display;
 }
 
-// Lightweight client-side "risk preview" heuristic — purely cosmetic/UX,
-// the REAL fraud score still comes from the backend ML model after submit.
 function estimateRisk({ amount, to_email }) {
   const amt = parseFloat(amount) || 0;
   let score = 0;
@@ -58,7 +62,6 @@ function estimateRisk({ amount, to_email }) {
     if (freeDomains.some((d) => to_email.toLowerCase().includes(d))) score += 30;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to_email)) score += 10;
   }
-  // light pseudo-randomness so the gauge feels "alive" without being meaningless
   score += Math.min(8, amt % 7);
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -69,15 +72,14 @@ function riskMeta(score) {
   return { label: "Low Risk", color: "#22c55e" };
 }
 
-// Semi-circle SVG gauge
 function RiskGauge({ score }) {
   const meta = riskMeta(score);
   const r = 54;
-  const circumference = Math.PI * r; // half circle
+  const circumference = Math.PI * r;
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
       <svg width="130" height="74" viewBox="0 0 130 74">
         <path
           d="M 8 70 A 54 54 0 0 1 122 70"
@@ -113,7 +115,37 @@ function RiskGauge({ score }) {
   );
 }
 
-// Skeleton loader row for the transactions table
+// Daily limit progress bar
+function DailyLimitBar({ used, limit, label, color }) {
+  const pct = Math.min(100, (used / limit) * 100);
+  const remaining = Math.max(0, limit - used);
+  const barColor = pct >= 90 ? "#ef4444" : pct >= 65 ? "#f59e0b" : color || "#22c55e";
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 4 }}>
+        <span>{label}</span>
+        <span style={{ color: T.text }}>
+          ${remaining.toLocaleString()} remaining
+        </span>
+      </div>
+      <div style={{ height: 6, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 3 }}>
+        ${used.toLocaleString()} of ${limit.toLocaleString()} used today
+      </div>
+    </div>
+  );
+}
+
 function SkeletonRow() {
   return (
     <tr>
@@ -135,7 +167,6 @@ function SkeletonRow() {
   );
 }
 
-// Tiny sparkline bars built from raw numbers, no chart lib needed
 function MiniSparkline({ values, color }) {
   const max = Math.max(1, ...values);
   return (
@@ -167,11 +198,22 @@ export default function Banking({ user, onBalanceUpdate }) {
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
-  const [msgType, setMsgType] = useState("success"); // "success" | "pending"
+  const [msgType, setMsgType] = useState("success");
   const [err, setErr] = useState("");
   const [accountHeld, setAccountHeld] = useState(user.held || false);
   const [sendForm, setSendForm] = useState({ to_email: "", amount: "", description: "" });
   const [amount, setAmount] = useState("");
+
+  // Daily usage tracking (loaded from backend or computed from txns)
+  const [dailyUsed, setDailyUsed] = useState({ sendWithdraw: 0, deposit: 0 });
+
+  // Face verification gate
+  const [faceRegistered, setFaceRegistered] = useState(false);
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [faceReason, setFaceReason] = useState("");
+  // faceVerified = true means user JUST passed face check this session → bypass fraud block
+  const [faceVerified, setFaceVerified] = useState(false);
+  const pendingTxnRef = useRef(null);
 
   const tabRefs = useRef({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
@@ -188,12 +230,37 @@ export default function Banking({ user, onBalanceUpdate }) {
 
   useEffect(() => {
     loadTxns();
+    loadFaceStatus();
   }, []);
 
   useEffect(() => {
     const el = tabRefs.current[tab];
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
   }, [tab, loading]);
+
+  // Recompute daily usage whenever txns change
+  useEffect(() => {
+    const today = new Date().toDateString();
+    let sw = 0, dep = 0;
+    txns.forEach((t) => {
+      const tDate = new Date(
+        t.created_at.includes("T") ? t.created_at : t.created_at.replace(" ", "T") + "Z"
+      ).toDateString();
+      if (tDate !== today) return;
+      if (t.status === "blocked") return;
+      if (t.type === "send" || t.type === "withdraw") sw += t.amount || 0;
+      if (t.type === "deposit") dep += t.amount || 0;
+    });
+    setDailyUsed({ sendWithdraw: sw, deposit: dep });
+  }, [txns]);
+
+  const loadFaceStatus = async () => {
+    try {
+      const r = await fetch(`${BASE}/api/face/status?token=${token}`);
+      const d = await r.json();
+      setFaceRegistered(!!d.registered);
+    } catch {}
+  };
 
   const loadTxns = async () => {
     setLoading(true);
@@ -205,19 +272,50 @@ export default function Banking({ user, onBalanceUpdate }) {
     setLoading(false);
   };
 
-  const doTransaction = async (type, amount, extra = {}) => {
+  // Check daily limit before submitting
+  const checkDailyLimit = (type, amt) => {
+    const num = parseFloat(amt) || 0;
+    if (type === "deposit") {
+      if (dailyUsed.deposit + num > DAILY_LIMIT_DEPOSIT) {
+        return `Daily deposit limit of $${DAILY_LIMIT_DEPOSIT.toLocaleString()} reached. Remaining: $${Math.max(0, DAILY_LIMIT_DEPOSIT - dailyUsed.deposit).toLocaleString()}`;
+      }
+    } else if (type === "send" || type === "withdraw") {
+      if (dailyUsed.sendWithdraw + num > DAILY_LIMIT_SEND_WITHDRAW) {
+        return `Daily send/withdraw limit of $${DAILY_LIMIT_SEND_WITHDRAW.toLocaleString()} reached. Remaining: $${Math.max(0, DAILY_LIMIT_SEND_WITHDRAW - dailyUsed.sendWithdraw).toLocaleString()}`;
+      }
+    }
+    return null;
+  };
+
+  // Actually fires the transaction request to the backend.
+  // faceVerifiedOverride = true means face was verified, so skip fraud block on frontend
+  const doTransaction = async (type, amount, extra = {}, faceVerifiedOverride = false) => {
     setMsg("");
     setErr("");
     if (!amount || amount <= 0) {
       setErr("Invalid amount");
       return;
     }
+
+    // Daily limit check
+    const limitErr = checkDailyLimit(type, amount);
+    if (limitErr) {
+      setErr(limitErr);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/auth/transaction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, type, amount: parseFloat(amount), ...extra }),
+        body: JSON.stringify({
+          token,
+          type,
+          amount: parseFloat(amount),
+          face_verified: faceVerifiedOverride, // tell backend face was verified
+          ...extra,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -229,6 +327,19 @@ export default function Banking({ user, onBalanceUpdate }) {
         return;
       }
       if (data.status === "blocked") {
+        // If face was verified, override block and warn user instead
+        if (faceVerifiedOverride) {
+          setMsgType("success");
+          setBalance(data.new_balance ?? balance);
+          onBalanceUpdate && onBalanceUpdate(data.new_balance ?? balance);
+          setMsg(
+            `✅ ${type.charAt(0).toUpperCase() + type.slice(1)} of $${parseFloat(amount).toLocaleString()} completed (face-verified — fraud flag overridden).`
+          );
+          setSendForm({ to_email: "", amount: "", description: "" });
+          setAmount("");
+          loadTxns();
+          return;
+        }
         setErr(`Transaction blocked: ${data.reason}`);
         return;
       }
@@ -255,6 +366,54 @@ export default function Banking({ user, onBalanceUpdate }) {
     setLoading(false);
   };
 
+  // Gate: decide if face verification is needed first
+  const requestTransaction = (type, amt, extra = {}) => {
+    setMsg("");
+    setErr("");
+    const numericAmt = parseFloat(amt) || 0;
+
+    // Daily limit check early
+    const limitErr = checkDailyLimit(type, amt);
+    if (limitErr) {
+      setErr(limitErr);
+      return;
+    }
+
+    const needsFace =
+      faceRegistered &&
+      (type === "send" || type === "withdraw") &&
+      numericAmt >= FACE_VERIFY_THRESHOLD;
+
+    if (needsFace) {
+      pendingTxnRef.current = { type, amount: amt, extra };
+      setFaceReason(
+        `${type === "send" ? "Sending" : "Withdrawing"} $${numericAmt.toLocaleString()} — above your $${FACE_VERIFY_THRESHOLD.toLocaleString()} face-verification limit`
+      );
+      setShowFaceModal(true);
+      return;
+    }
+
+    doTransaction(type, amt, extra, false);
+  };
+
+  const handleFaceSuccess = () => {
+    setShowFaceModal(false);
+    setFaceVerified(true);
+    const pending = pendingTxnRef.current;
+    pendingTxnRef.current = null;
+    if (pending) {
+      // Pass faceVerifiedOverride = true so fraud block is bypassed
+      doTransaction(pending.type, pending.amount, pending.extra, true);
+    }
+  };
+
+  const handleFaceFail = () => {
+    setShowFaceModal(false);
+    setFaceVerified(false);
+    pendingTxnRef.current = null;
+    setErr("Face verification failed or was cancelled — transaction was not submitted.");
+  };
+
   const upd = (k) => (e) => setSendForm((f) => ({ ...f, [k]: e.target.value }));
 
   const txnIcon = (t) => (t === "send" ? "↑" : t === "receive" ? "↓" : t === "deposit" ? "+" : "−");
@@ -267,11 +426,13 @@ export default function Banking({ user, onBalanceUpdate }) {
   const blockedSaved = txns.filter((t) => t.status === "blocked").reduce((a, t) => a + t.amount, 0);
   const pendingCount = txns.filter((t) => t.status === "pending").length;
 
-  // last 8 transactions (oldest->newest) amounts for sparkline
   const recentAmounts = txns.slice(0, 8).reverse().map((t) => t.amount || 0);
 
   const risk = estimateRisk(sendForm);
   const riskInfo = riskMeta(risk);
+
+  const swRemaining = Math.max(0, DAILY_LIMIT_SEND_WITHDRAW - dailyUsed.sendWithdraw);
+  const depRemaining = Math.max(0, DAILY_LIMIT_DEPOSIT - dailyUsed.deposit);
 
   return (
     <div>
@@ -294,7 +455,59 @@ export default function Banking({ user, onBalanceUpdate }) {
           border: none !important;
           transition: color 0.25s ease;
         }
+
+        /* ── Responsive ─────────────────────────────── */
+        .ng-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        .ng-balance-card {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
+        .ng-balance-amount { font-size: 48px; }
+        .ng-send-row {
+          display: flex;
+          gap: 20px;
+          flex-wrap: wrap;
+        }
+        .ng-tabs {
+          display: flex;
+          gap: 4px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        .ng-tabs::-webkit-scrollbar { display: none; }
+        .ng-txn-table { overflow-x: auto; }
+
+        @media (max-width: 700px) {
+          .ng-stats-grid { grid-template-columns: 1fr 1fr; }
+          .ng-balance-amount { font-size: 34px !important; letter-spacing: -1px !important; }
+          .ng-balance-icon { display: none; }
+          .ng-send-row { flex-direction: column; }
+          .ng-tab-btn { font-size: 13px !important; padding: 8px 10px !important; }
+        }
+
+        @media (max-width: 480px) {
+          .ng-stats-grid { grid-template-columns: 1fr; }
+          .ng-balance-card { flex-direction: column; align-items: flex-start; }
+        }
       `}</style>
+
+      {/* Face Verification Modal */}
+      {showFaceModal && (
+        <FaceVerificationModal
+          reason={faceReason}
+          onSuccess={handleFaceSuccess}
+          onFail={handleFaceFail}
+        />
+      )}
 
       {/* Account Held Banner */}
       {accountHeld && (
@@ -327,7 +540,7 @@ export default function Banking({ user, onBalanceUpdate }) {
         <div style={s.muted}>Manage your balance, send & receive money</div>
       </div>
 
-      {/* Balance Card — glassmorphism + glow + animated number */}
+      {/* Balance Card */}
       <div
         className="ng-glass"
         style={{
@@ -337,9 +550,6 @@ export default function Banking({ user, onBalanceUpdate }) {
           borderRadius: 20,
           padding: 32,
           marginBottom: 20,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
           boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
         }}
       >
@@ -355,31 +565,58 @@ export default function Banking({ user, onBalanceUpdate }) {
             pointerEvents: "none",
           }}
         />
-        <div style={{ position: "relative" }}>
-          <div
-            style={{
-              fontSize: 13,
-              color: T.muted,
-              marginBottom: 8,
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-            }}
-          >
-            Available Balance
+        <div className="ng-balance-card" style={{ position: "relative" }}>
+          <div>
+            <div
+              style={{
+                fontSize: 13,
+                color: T.muted,
+                marginBottom: 8,
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+              }}
+            >
+              Available Balance
+            </div>
+            <div className="ng-balance-amount" style={{ fontWeight: 700, letterSpacing: "-2px", color: T.text }}>
+              ${animatedBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: 13, color: T.muted, marginTop: 8 }}>{user.email}</div>
           </div>
-          <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: "-2px", color: T.text }}>
-            ${animatedBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="ng-balance-icon" style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 48, opacity: 0.3 }}>🏦</div>
+            <div style={{ ...s.badge, ...s.badgeGreen, marginTop: 8 }}>● Active</div>
           </div>
-          <div style={{ fontSize: 13, color: T.muted, marginTop: 8 }}>{user.email}</div>
         </div>
-        <div style={{ textAlign: "right", position: "relative" }}>
-          <div style={{ fontSize: 48, opacity: 0.3 }}>🏦</div>
-          <div style={{ ...s.badge, ...s.badgeGreen, marginTop: 8 }}>● Active</div>
+
+        {/* Daily Limits inside balance card */}
+        <div
+          style={{
+            marginTop: 20,
+            paddingTop: 16,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 16,
+          }}
+        >
+          <DailyLimitBar
+            used={dailyUsed.sendWithdraw}
+            limit={DAILY_LIMIT_SEND_WITHDRAW}
+            label="Daily Send / Withdraw"
+            color="#60a5fa"
+          />
+          <DailyLimitBar
+            used={dailyUsed.deposit}
+            limit={DAILY_LIMIT_DEPOSIT}
+            label="Daily Deposit"
+            color="#22c55e"
+          />
         </div>
       </div>
 
-      {/* Quick Stats with sparklines */}
-      <div style={s.grid3}>
+      {/* Quick Stats */}
+      <div className="ng-stats-grid">
         {[
           ["💸 Total Sent", totalSent, T.red, recentAmounts],
           ["💰 Total Received", totalReceived, T.green, recentAmounts],
@@ -413,29 +650,50 @@ export default function Banking({ user, onBalanceUpdate }) {
         </div>
       )}
 
+      {/* Face ID hint */}
+      {!faceRegistered && (
+        <div
+          style={{
+            fontSize: 12,
+            color: T.muted,
+            margin: "0 0 18px",
+            padding: "10px 14px",
+            background: T.surface,
+            borderRadius: 10,
+            border: `1px solid ${T.border}`,
+          }}
+        >
+          🔐 Tip: Register Face ID in Settings to add an extra verification step for transactions over $
+          {FACE_VERIFY_THRESHOLD.toLocaleString()}.
+        </div>
+      )}
+
       {/* Tabs with sliding indicator */}
-      <div style={{ position: "relative", display: "flex", gap: 8, marginBottom: 16, borderBottom: `1px solid ${T.border}` }}>
-        {TABS.map(([t, label]) => (
-          <button
-            key={t}
-            ref={(el) => (tabRefs.current[t] = el)}
-            className="ng-tab-btn"
-            onClick={() => {
-              setTab(t);
-              setMsg("");
-              setErr("");
-            }}
-            style={{
-              ...s.navItem,
-              background: "transparent",
-              color: tab === t ? T.text : T.muted,
-              fontWeight: tab === t ? 700 : 500,
-              padding: "10px 14px",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div style={{ position: "relative", marginBottom: 16, borderBottom: `1px solid ${T.border}` }}>
+        <div className="ng-tabs">
+          {TABS.map(([t, label]) => (
+            <button
+              key={t}
+              ref={(el) => (tabRefs.current[t] = el)}
+              className="ng-tab-btn"
+              onClick={() => {
+                setTab(t);
+                setMsg("");
+                setErr("");
+              }}
+              style={{
+                ...s.navItem,
+                background: "transparent",
+                color: tab === t ? T.text : T.muted,
+                fontWeight: tab === t ? 700 : 500,
+                padding: "10px 14px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div
           style={{
             position: "absolute",
@@ -473,7 +731,7 @@ export default function Banking({ user, onBalanceUpdate }) {
         </div>
       )}
 
-      {/* Pending confirmation banner — matches the new email-confirm flow */}
+      {/* Pending confirmation banner */}
       {msg && msgType === "pending" && (
         <div
           className="ng-glass ng-fade"
@@ -534,116 +792,113 @@ export default function Banking({ user, onBalanceUpdate }) {
         <div className="ng-glass ng-fade" style={{ ...s.card, borderRadius: 16 }}>
           <div style={{ ...s.h3, marginBottom: 16 }}>Transaction History</div>
           {loading ? (
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  {["Type", "Amount", "To/From", "Description", "Status", "Fraud Score", "Date"].map((h) => (
-                    <th key={h} style={s.th}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <SkeletonRow key={i} />
-                ))}
-              </tbody>
-            </table>
+            <div className="ng-txn-table">
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    {["Type", "Amount", "To/From", "Description", "Status", "Fraud Score", "Date"].map((h) => (
+                      <th key={h} style={s.th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
+                </tbody>
+              </table>
+            </div>
           ) : txns.length === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: T.muted }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>💳</div>
               <div>No transactions yet</div>
             </div>
           ) : (
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  {["Type", "Amount", "To/From", "Description", "Status", "Fraud Score", "Date"].map((h) => (
-                    <th key={h} style={s.th}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {txns.map((t) => (
-                  <tr key={t.id} className="ng-fade">
-                    <td style={s.td}>
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: "50%",
-                          background: `${txnColor(t.type)}22`,
-                          color: txnColor(t.type),
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                          fontSize: 16,
-                        }}
-                      >
-                        {txnIcon(t.type)}
-                      </div>
-                      <span style={{ marginLeft: 8, fontSize: 13, textTransform: "capitalize" }}>{t.type}</span>
-                    </td>
-                    <td style={{ ...s.td, fontWeight: 700, color: txnColor(t.type) }}>
-                      {t.type === "send" || t.type === "withdraw" ? "-" : "+"}$
-                      {parseFloat(t.amount).toLocaleString()}
-                    </td>
-                    <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{t.to_email || "—"}</td>
-                    <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{t.description || "—"}</td>
-                    <td style={s.td}>
-                      <span style={{ ...s.badge, ...statusBadge(t.status) }}>
-                        {t.status === "pending" ? "⏳ AWAITING EMAIL" : t.status?.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ ...s.td, padding: "10px 12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="ng-txn-table">
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    {["Type", "Amount", "To/From", "Description", "Status", "Fraud Score", "Date"].map((h) => (
+                      <th key={h} style={s.th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {txns.map((t) => (
+                    <tr key={t.id} className="ng-fade">
+                      <td style={s.td}>
                         <div
                           style={{
-                            width: 56,
-                            height: 6,
-                            borderRadius: 4,
-                            background: "rgba(255,255,255,0.08)",
-                            overflow: "hidden",
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            background: `${txnColor(t.type)}22`,
+                            color: txnColor(t.type),
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 700,
+                            fontSize: 16,
                           }}
                         >
+                          {txnIcon(t.type)}
+                        </div>
+                        <span style={{ marginLeft: 8, fontSize: 13, textTransform: "capitalize" }}>{t.type}</span>
+                      </td>
+                      <td style={{ ...s.td, fontWeight: 700, color: txnColor(t.type) }}>
+                        {t.type === "send" || t.type === "withdraw" ? "-" : "+"}$
+                        {parseFloat(t.amount).toLocaleString()}
+                      </td>
+                      <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{t.to_email || "—"}</td>
+                      <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{t.description || "—"}</td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badge, ...statusBadge(t.status) }}>
+                          {t.status === "pending" ? "⏳ AWAITING EMAIL" : t.status?.toUpperCase()}
+                        </span>
+                      </td>
+                      <td style={{ ...s.td, padding: "10px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div
                             style={{
-                              height: "100%",
-                              width: `${Math.min(100, parseFloat(t.fraud_score || 0))}%`,
-                              background:
-                                t.fraud_score > 70 ? T.red : t.fraud_score > 30 ? T.amber : T.green,
-                              transition: "width 0.4s ease",
+                              width: 56,
+                              height: 6,
+                              borderRadius: 4,
+                              background: "rgba(255,255,255,0.08)",
+                              overflow: "hidden",
                             }}
-                          />
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${Math.min(100, parseFloat(t.fraud_score || 0))}%`,
+                                background: t.fraud_score > 70 ? T.red : t.fraud_score > 30 ? T.amber : T.green,
+                                transition: "width 0.4s ease",
+                              }}
+                            />
+                          </div>
+                          <span
+                            style={{
+                              color: t.fraud_score > 70 ? T.red : t.fraud_score > 30 ? T.amber : T.green,
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            {parseFloat(t.fraud_score || 0).toFixed(1)}%
+                          </span>
                         </div>
-                        <span
-                          style={{
-                            color: t.fraud_score > 70 ? T.red : t.fraud_score > 30 ? T.amber : T.green,
-                            fontWeight: 600,
-                            fontSize: 12,
-                          }}
-                        >
-                          {parseFloat(t.fraud_score || 0).toFixed(1)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{timeAgo(t.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{timeAgo(t.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
       {/* Send Money Tab */}
       {tab === "send" && (
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div className="ng-glass ng-fade" style={{ ...s.card, maxWidth: 480, flex: "1 1 360px", borderRadius: 16 }}>
+        <div className="ng-send-row">
+          <div className="ng-glass ng-fade" style={{ ...s.card, maxWidth: 480, flex: "1 1 300px", borderRadius: 16 }}>
             <div style={s.h3}>↑ Send Money</div>
             <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
               Transfer funds to another NexaGuard user
@@ -683,12 +938,30 @@ export default function Banking({ user, onBalanceUpdate }) {
 
             <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
               Available: <strong style={{ color: T.text }}>${balance.toLocaleString()}</strong>
+              {" · "}
+              Daily remaining: <strong style={{ color: swRemaining > 0 ? T.text : T.red }}>${swRemaining.toLocaleString()}</strong>
             </div>
+
+            {faceRegistered && parseFloat(sendForm.amount || 0) >= FACE_VERIFY_THRESHOLD && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#60a5fa",
+                  marginTop: 10,
+                  padding: "8px 12px",
+                  background: "rgba(96,165,250,0.10)",
+                  border: "1px solid rgba(96,165,250,0.25)",
+                  borderRadius: 8,
+                }}
+              >
+                🛡️ This amount requires Face ID verification before sending. Fraud block will be bypassed after verification.
+              </div>
+            )}
 
             <button
               style={{ ...s.btn, marginTop: 20, opacity: loading ? 0.7 : 1 }}
               onClick={() =>
-                doTransaction("send", sendForm.amount, {
+                requestTransaction("send", sendForm.amount, {
                   to_email: sendForm.to_email,
                   description: sendForm.description,
                 })
@@ -699,8 +972,8 @@ export default function Banking({ user, onBalanceUpdate }) {
             </button>
           </div>
 
-          {/* Live risk preview card */}
-          <div className="ng-glass ng-fade" style={{ ...s.card, flex: "1 1 280px", maxWidth: 320, borderRadius: 16 }}>
+          {/* Live risk preview */}
+          <div className="ng-glass ng-fade" style={{ ...s.card, flex: "1 1 240px", maxWidth: 320, borderRadius: 16 }}>
             <div style={{ ...s.h3, fontSize: 15, marginBottom: 14 }}>🛡️ Risk Preview</div>
             <RiskGauge score={risk} />
             <div
@@ -713,14 +986,10 @@ export default function Banking({ user, onBalanceUpdate }) {
                 paddingTop: 14,
               }}
             >
-              Based on amount and recipient pattern. This is a quick client-side estimate —
-              the actual transaction is scored by NexaGuard's ML fraud model
-              ({riskInfo.label.toLowerCase()} signals detected so far).
+              Based on amount and recipient pattern. Actual score is calculated by NexaGuard's ML model
+              ({riskInfo.label.toLowerCase()} signals detected).
               {risk >= 35 && (
-                <>
-                  {" "}
-                  If this lands in the medium-risk range, you'll get an email with a confirm link to complete it.
-                </>
+                <> If medium-risk, you'll get an email confirm link — unless Face ID is verified.</>
               )}
             </div>
           </div>
@@ -756,6 +1025,10 @@ export default function Banking({ user, onBalanceUpdate }) {
             ))}
           </div>
 
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
+            Daily deposit remaining: <strong style={{ color: depRemaining > 0 ? T.text : T.red }}>${depRemaining.toLocaleString()}</strong>
+          </div>
+
           <button
             style={{ ...s.btn, marginTop: 20, background: T.green, opacity: loading ? 0.7 : 1 }}
             onClick={() => doTransaction("deposit", amount)}
@@ -785,7 +1058,25 @@ export default function Banking({ user, onBalanceUpdate }) {
 
           <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
             Available: <strong style={{ color: T.text }}>${balance.toLocaleString()}</strong>
+            {" · "}
+            Daily remaining: <strong style={{ color: swRemaining > 0 ? T.text : T.red }}>${swRemaining.toLocaleString()}</strong>
           </div>
+
+          {faceRegistered && parseFloat(amount || 0) >= FACE_VERIFY_THRESHOLD && (
+            <div
+              style={{
+                fontSize: 12,
+                color: "#60a5fa",
+                marginTop: 10,
+                padding: "8px 12px",
+                background: "rgba(96,165,250,0.10)",
+                border: "1px solid rgba(96,165,250,0.25)",
+                borderRadius: 8,
+              }}
+            >
+              🛡️ This amount requires Face ID verification before withdrawing. Fraud block will be bypassed after verification.
+            </div>
+          )}
 
           <button
             style={{
@@ -796,7 +1087,7 @@ export default function Banking({ user, onBalanceUpdate }) {
               border: `1px solid rgba(239,68,68,0.3)`,
               opacity: loading ? 0.7 : 1,
             }}
-            onClick={() => doTransaction("withdraw", amount)}
+            onClick={() => requestTransaction("withdraw", amount)}
             disabled={loading}
           >
             {loading ? "Processing..." : "− Withdraw Funds"}
