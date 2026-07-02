@@ -304,5 +304,5 @@ npm run dev
 ---
 
 <div align="center">
-<sub>Built with ❤️ by Rana Muhammad Uzair &nbsp;•&nbsp; NexaGuard © 2025</sub>
+<sub>Built with ❤️ by Rana Muhammad Uzair &nbsp;•&nbsp; NexaGuard © 2026</sub>
 </div>
