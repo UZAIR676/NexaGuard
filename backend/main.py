@@ -1,12 +1,17 @@
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+
 from fastapi import FastAPI, Query
 from routes.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 from routes.ai_advisor import router as ai_router
-from services.lstm_predictor import router as ml_router
+from services.lstm_predictor import router as lstm_router
 from routes.csv_scanner import router as csv_router
 from routes.ml import router as ml_router
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from routes.face_auth import router as face_router
+from routes.settings import router as settings_router
 
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
@@ -30,14 +35,16 @@ app.add_middleware(
 )
 
 app.include_router(fraud_router)
-app.include_router(auth_router)  
+app.include_router(auth_router)
 app.include_router(ai_router)
 app.include_router(technical_router)
+app.include_router(lstm_router)
 app.include_router(ml_router)
 app.include_router(csv_router)
 app.include_router(alerts_router)
-app.include_router(ml_router)
 app.include_router(face_router)
+app.include_router(settings_router)
+
 # Market endpoints
 @app.get("/api/market/summary")
 def market_summary():

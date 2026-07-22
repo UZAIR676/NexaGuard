@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { T, s } from "../theme";
 
-export default function Login({ onAuth, goSignup }) {
+export default function Login({ onAuth, goSignup, goForgotPassword }) {
   const [form, setForm]       = useState({ email: "", password: "" });
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep]       = useState("login"); // "login" | "face"
+  const [step, setStep]       = useState("login"); // "login" | "face" | "face-register"
   const [userData, setUserData] = useState(null);
   const [faceLoading, setFaceLoading] = useState(false);
   const [faceMsg, setFaceMsg] = useState("");
@@ -32,21 +32,28 @@ export default function Login({ onAuth, goSignup }) {
       const data = await res.json();
       if (!res.ok) { setErr(data.detail || "Login failed"); return; }
 
-      localStorage.setItem("ng_token", data.token);
+      // ⚠️ FIX: Do NOT persist the token to localStorage here.
+      // The user is only email/password-authenticated at this point,
+      // not face-verified. Keep the token in memory (React state) only,
+      // so a page refresh can't let someone skip the face check.
+      // localStorage.setItem("ng_token", data.token);   <-- removed
 
       // Check if face is registered
       const faceStatus = await fetch(
         `http://localhost:8000/api/face/status?token=${data.token}`
       ).then(r => r.json());
 
+      setUserData({ token: data.token, user: data.user });
+
       if (faceStatus.registered) {
-        // Face registered → verify
-        setUserData({ token: data.token, user: data.user });
+        // Face registered → must verify, no bypass
         setStep("face");
         startCamera();
       } else {
-        // No face → go straight in
-        onAuth(data.user);
+        // Face ID is mandatory for every account — register it now instead
+        // of letting the user straight in.
+        setStep("face-register");
+        startCamera();
       }
     } catch {
       setErr("Cannot connect to server.");
@@ -66,7 +73,7 @@ export default function Login({ onAuth, goSignup }) {
         if (videoRef.current) videoRef.current.srcObject = stream;
       }, 100);
     } catch {
-      setFaceErr("Camera access denied. Please allow camera.");
+      setFaceErr("Camera access denied. Face verification is required — please allow camera access and reload.");
     }
   };
 
@@ -86,7 +93,7 @@ export default function Login({ onAuth, goSignup }) {
     return canvas.toDataURL("image/jpeg", 0.8);
   };
 
-  // ── Step 2: Face Verify ────────────────────────────────────────────────
+  // ── Step 2a: Face Verify (existing Face ID) ────────────────────────────
   const verifyFace = async () => {
     setFaceErr("");
     setFaceMsg("");
@@ -137,6 +144,12 @@ export default function Login({ onAuth, goSignup }) {
 
       if (verifyRes.verified) {
         setFaceMsg(`✅ Face verified! Similarity: ${(verifyRes.similarity * 100).toFixed(1)}%`);
+
+        // ✅ FIX: Only persist the token now, after face verification
+        // has actually succeeded. This is what prevents "refresh skips
+        // face check" — there's nothing in localStorage until this point.
+        localStorage.setItem("ng_token", userData.token);
+
         stopCamera();
         setTimeout(() => onAuth(userData.user), 1000);
       } else {
@@ -148,9 +161,53 @@ export default function Login({ onAuth, goSignup }) {
     setFaceLoading(false);
   };
 
-  const skipFace = () => {
-    stopCamera();
-    onAuth(userData.user);
+  // ── Step 2b: Mandatory Face Registration (first-time / never registered) ─
+  const registerFace = async () => {
+    setFaceErr("");
+    setFaceMsg("Capturing...");
+
+    // Capture 5 frames with delay so the camera has time to stabilize
+    const captured = [];
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 700));
+      const frame = captureFrame();
+      if (frame) captured.push(frame);
+      setFaceMsg(`Capturing ${i + 1}/5...`);
+    }
+
+    if (captured.length < 3) {
+      setFaceErr("Could not capture enough frames. Please try again.");
+      return;
+    }
+
+    const image = captured[Math.floor(captured.length / 2)]; // middle frame
+
+    setFaceLoading(true);
+    setFaceMsg("Registering your face...");
+    try {
+      const res  = await fetch("http://localhost:8000/api/face/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: userData.token, image }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFaceErr(data.detail || "Face registration failed. Make sure your face is clearly visible and try again.");
+        setFaceLoading(false);
+        return;
+      }
+      setFaceMsg("✅ Face registered successfully!");
+
+      // ✅ FIX: Same as above — persist token only after registration
+      // (which itself requires a captured face) actually succeeds.
+      localStorage.setItem("ng_token", userData.token);
+
+      stopCamera();
+      setTimeout(() => onAuth(userData.user), 1000);
+    } catch {
+      setFaceErr("Could not connect to server.");
+    }
+    setFaceLoading(false);
   };
 
   const guest = () => onAuth({ name: "Guest", email: "guest@nexaguard.ai" });
@@ -158,7 +215,91 @@ export default function Login({ onAuth, goSignup }) {
   // Cleanup on unmount
   useEffect(() => () => stopCamera(), []);
 
-  // ── Render: Face Step ──────────────────────────────────────────────────
+  // ── Render: Mandatory Face Registration Step ───────────────────────────
+  if (step === "face-register") {
+    return (
+      <div style={s.authWrap}>
+        <div style={{ ...s.authLeft, maxWidth: 480 }}>
+          <div style={s.logo}>
+            <div style={s.logoIcon}>🛡️</div>
+            <span style={s.logoText}>NexaGuard</span>
+          </div>
+
+          <div style={s.authTitle}>Set Up Face ID</div>
+          <div style={s.authSub}>
+            Face ID is now required on every account. Let's register yours — this only takes a second.
+          </div>
+
+          <div style={{
+            position: "relative", borderRadius: 16, overflow: "hidden",
+            border: `2px solid ${faceErr ? T.red : faceMsg.includes("✅") ? T.green : T.accent}`,
+            marginBottom: 16, background: "#000", aspectRatio: "4/3"
+          }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
+            />
+            <div style={{
+              position: "absolute", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "55%", aspectRatio: "3/4",
+              border: `2px dashed ${faceMsg.includes("✅") ? T.green : "rgba(255,255,255,0.4)"}`,
+              borderRadius: "50%", pointerEvents: "none"
+            }} />
+            {faceMsg && (
+              <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, textAlign: "center" }}>
+                <span style={{
+                  background: "rgba(0,0,0,0.7)", color: "#fff",
+                  padding: "6px 14px", borderRadius: 20, fontSize: 13
+                }}>
+                  {faceMsg}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {faceErr && (
+            <div style={{
+              color: T.red, fontSize: 13, marginBottom: 12,
+              padding: "10px 14px", background: "rgba(239,68,68,0.1)",
+              borderRadius: 8, border: `1px solid rgba(239,68,68,0.2)`
+            }}>
+              {faceErr}
+            </div>
+          )}
+
+          <button
+            style={{ ...s.btn, opacity: faceLoading ? 0.7 : 1 }}
+            onClick={registerFace}
+            disabled={faceLoading}
+          >
+            {faceLoading ? "Registering..." : "📸 Capture & Register Face"}
+          </button>
+
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 12, textAlign: "center" }}>
+            Logged in as <strong>{userData?.user?.email}</strong>
+          </div>
+        </div>
+
+        <div style={s.authRight}>
+          <div style={{ position: "relative", textAlign: "center", zIndex: 1 }}>
+            <div style={{ fontSize: 56, marginBottom: 20 }}>👤</div>
+            <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 12, color: T.text }}>
+              Face ID Verification
+            </div>
+            <div style={{ color: T.muted, fontSize: 15, lineHeight: 1.8, maxWidth: 360 }}>
+              NexaGuard uses FaceNet Deep Learning to verify your identity locally — no data sent to any server.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: Face Verify Step ────────────────────────────────────────────
   if (step === "face") {
     return (
       <div style={s.authWrap}>
@@ -234,7 +375,8 @@ export default function Login({ onAuth, goSignup }) {
             📋 <strong>Instructions:</strong><br/>
             • Sit directly facing the camera<br/>
             • Move your face slightly (liveness check)<br/>
-            • Make sure you're in good lighting
+            • Make sure you're in good lighting<br/>
+            • Face verification cannot be skipped
           </div>
 
           {faceErr && (
@@ -255,13 +397,6 @@ export default function Login({ onAuth, goSignup }) {
             {capturing ? `Capturing ${frames.length}/5...`
             : faceLoading ? "Verifying..."
             : "🔍 Verify Face"}
-          </button>
-
-          <button
-            style={{ ...s.btn, ...s.btnSec, marginTop: 8 }}
-            onClick={skipFace}
-          >
-            Skip Face Verification →
           </button>
 
           <div style={{ fontSize: 12, color: T.muted, marginTop: 12, textAlign: "center" }}>
@@ -319,6 +454,10 @@ export default function Login({ onAuth, goSignup }) {
           onKeyDown={e => e.key === "Enter" && submit()}
           onFocus={e => e.target.style.borderColor = T.accent}
           onBlur={e => e.target.style.borderColor = T.border} />
+
+        <span style={{ ...s.link, fontSize: 13, marginTop: 6, display: "inline-block" }} onClick={goForgotPassword}>
+          Forgot password?
+        </span>
 
         {err && <div style={{ color: T.red, fontSize: 13, marginTop: 10 }}>{err}</div>}
 

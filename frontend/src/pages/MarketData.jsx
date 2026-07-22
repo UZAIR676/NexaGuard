@@ -7,6 +7,79 @@ import {
 import { T, s } from "../theme";
 import { api } from "../api";
 
+// ── Company name → ticker symbol mapping ──
+// Search box abhi sirf ticker leta tha (AMZN). Ye map full names
+// (amazon, apple, tesla...) ko sahi symbol mein convert karta hai.
+const COMPANY_ALIASES = {
+  "amazon": "AMZN",
+  "apple": "AAPL",
+  "google": "GOOGL",
+  "alphabet": "GOOGL",
+  "microsoft": "MSFT",
+  "tesla": "TSLA",
+  "meta": "META",
+  "facebook": "META",
+  "netflix": "NFLX",
+  "nvidia": "NVDA",
+  "jpmorgan": "JPM",
+  "jp morgan": "JPM",
+  "visa": "V",
+  "exxon": "XOM",
+  "exxon mobil": "XOM",
+  "exxonmobil": "XOM",
+  "bank of america": "BAC",
+  "wells fargo": "WFC",
+  "goldman sachs": "GS",
+  "mastercard": "MA",
+  "johnson & johnson": "JNJ",
+  "johnson and johnson": "JNJ",
+  "walmart": "WMT",
+  "costco": "COST",
+  "disney": "DIS",
+  "coca cola": "KO",
+  "coca-cola": "KO",
+  "pepsi": "PEP",
+  "pepsico": "PEP",
+  "intel": "INTC",
+  "amd": "AMD",
+  "advanced micro devices": "AMD",
+  "berkshire": "BRK-B",
+  "berkshire hathaway": "BRK-B",
+  "salesforce": "CRM",
+  "adobe": "ADBE",
+  "oracle": "ORCL",
+  "paypal": "PYPL",
+  "uber": "UBER",
+  "starbucks": "SBUX",
+  "boeing": "BA",
+  "ford": "F",
+  "general motors": "GM",
+  "chevron": "CVX",
+  "pfizer": "PFE",
+  "cisco": "CSCO",
+  "qualcomm": "QCOM",
+  "ibm": "IBM",
+};
+
+// Company/ticker input ko backend-friendly symbol mein resolve karta hai.
+function resolveSymbol(rawInput) {
+  const trimmed = (rawInput || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+
+  // Exact name match
+  if (COMPANY_ALIASES[lower]) return COMPANY_ALIASES[lower];
+
+  // Partial / fuzzy name match (e.g. "amazon.com", "apple inc")
+  const matchKey = Object.keys(COMPANY_ALIASES).find(
+    (name) => lower.includes(name) || name.includes(lower)
+  );
+  if (matchKey) return COMPANY_ALIASES[matchKey];
+
+  // Fallback: treat as a raw ticker symbol
+  return trimmed.toUpperCase();
+}
+
 export default function MarketData() {
   const [tab, setTab]             = useState("indices");
   const [indices, setIndices]     = useState([]);
@@ -29,6 +102,14 @@ export default function MarketData() {
   const [searchChart, setSearchChart]       = useState([]);
   const [searchPeriod, setSearchPeriod]     = useState("3mo");
   const [searchLoading, setSearchLoading]   = useState(false);
+  const [searchError, setSearchError]       = useState(null);
+  const [showSearchIndicators, setShowSearchIndicators] = useState(false);
+
+  // ── NEW: ML single-stock search ──
+  const [mlSearch, setMlSearch]   = useState("");
+  const [mlResult, setMlResult]   = useState(null);
+  const [mlSearchLoading, setMlSearchLoading] = useState(false);
+  const [mlSearchError, setMlSearchError]     = useState(null);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { loadHistory(selSym, selPeriod); }, [selSym, selPeriod]);
@@ -73,11 +154,31 @@ export default function MarketData() {
     setMlLoading(false);
   };
 
+  // ── NEW: ML single-stock predict ──
+  const searchML = async () => {
+    if (!mlSearch.trim()) return;
+    setMlSearchLoading(true);
+    setMlResult(null);
+    setMlSearchError(null);
+    try {
+      const sym = resolveSymbol(mlSearch);
+      const res = await fetch(`http://localhost:8000/api/ml/predict/${sym}`);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMlResult(data);
+    } catch (e) {
+      setMlSearchError(e.message || "Prediction failed");
+    }
+    setMlSearchLoading(false);
+  };
+
  const doSearch = async () => {
   if (!search) return;
   setSearchLoading(true);
+  setSearchError(null);
   try {
-    const sym = search.toUpperCase();
+    const sym = resolveSymbol(search);
     const [r, fund, hist] = await Promise.all([
       api.search(sym),
       api.fundamentals(sym),
@@ -86,7 +187,9 @@ export default function MarketData() {
     setSearchResult(r);
     setSearchFundamentals(fund);
     setSearchChart(hist.data || []);
-  } catch { }
+  } catch (e) {
+    setSearchError("Could not find that symbol/company. Try the ticker (e.g. AMZN).");
+  }
   setSearchLoading(false);
 };
 
@@ -98,8 +201,6 @@ export default function MarketData() {
     return `$${p.toFixed(2)}`;
   };
 
-  // FIX: helper for percent fields that can be null/undefined,
-  // pehle "(undefined * 100)?.toFixed(2)" => "NaN%" dikhata tha.
   const fmtPct = (v) => (v == null || isNaN(v)) ? "N/A" : `${(v * 100).toFixed(2)}%`;
 
   const color = (v) => v > 0 ? T.green : T.red;
@@ -122,7 +223,6 @@ export default function MarketData() {
   const mlHold   = mlSignals.filter(r => r.signal === "HOLD");
   const mlSell   = mlSignals.filter(r => r.signal === "SELL");
 
-  // Latest values for indicator display
   const latest    = history.length ? history[history.length - 1] : null;
   const rsiColor  = !latest?.rsi ? T.muted : latest.rsi > 70 ? T.red : latest.rsi < 30 ? T.green : T.amber;
   const macdColor = !latest?.macd ? T.muted : latest.macd > 0 ? T.green : T.red;
@@ -134,18 +234,50 @@ export default function MarketData() {
     return Math.floor(len / 6);
   };
 
+  // ── Signal color helper (reused for mlResult card) ──
+  const sigColor = (sig) =>
+    sig === "BUY"  ? T.green :
+    sig === "SELL" ? T.red   : T.amber;
+
   return (
     <div>
+      <style>{`
+        @keyframes ngPulseRed {
+          0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
+          70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+          100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+        .ng-live-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: ${T.red};
+          display: inline-block;
+          margin-right: 6px;
+          animation: ngPulseRed 1.6s infinite;
+        }
+        .ng-glow-card:hover {
+          box-shadow: 0 0 0 1px ${T.red}55, 0 8px 24px -8px ${T.red}33;
+          transition: box-shadow 0.25s ease;
+        }
+        .ng-red-underline {
+          background: linear-gradient(90deg, ${T.red}, transparent);
+          height: 2px;
+          width: 60px;
+          margin-top: 6px;
+          border-radius: 2px;
+        }
+      `}</style>
+
       {/* ── Header ── */}
       <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={s.h2}>Market Data</div>
-          <div style={s.muted}>Live USA market — real-time data from Yahoo Finance</div>
+          <div style={s.muted}><span className="ng-live-dot" />Live USA market — real-time data from Yahoo Finance</div>
+          <div className="ng-red-underline" />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <input
-            style={{ ...s.input, width: 160, marginTop: 0, padding: "8px 12px" }}
-            placeholder="Search: AAPL..."
+            style={{ ...s.input, width: 200, marginTop: 0, padding: "8px 12px" }}
+            placeholder="Search: AAPL or Amazon..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === "Enter" && doSearch()}
@@ -154,6 +286,13 @@ export default function MarketData() {
           <button onClick={loadAll}  style={{ ...s.navItem, ...s.navItemActive, padding: "8px 14px" }}>↻ Refresh</button>
         </div>
       </div>
+
+      {/* ── Search Error ── */}
+      {searchError && !searchLoading && (
+        <div style={{ ...s.card, marginBottom: 20, padding: "14px 16px", border: `1px solid ${T.red}`, color: T.red, fontSize: 13 }}>
+          ⚠️ {searchError}
+        </div>
+      )}
 
       {/* ── Search Result ── */}
       {searchLoading && (
@@ -233,13 +372,19 @@ export default function MarketData() {
         <div style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>
           Price Chart
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {[["1wk","1W"],["1mo","1M"],["3mo","3M"],["6mo","6M"],["1y","1Y"]].map(([val, label]) => (
             <button key={val} onClick={() => setSearchPeriod(val)}
               style={{ ...s.navItem, ...(searchPeriod === val ? s.navItemActive : {}), fontSize: 11, padding: "3px 9px" }}>
               {label}
             </button>
           ))}
+          <div style={{ width: 1, background: T.border, height: 20, margin: "0 2px" }} />
+          <button
+            onClick={() => setShowSearchIndicators(p => !p)}
+            style={{ ...s.navItem, ...(showSearchIndicators ? s.navItemActive : {}), fontSize: 11, padding: "3px 9px" }}>
+            📊 Indicators
+          </button>
         </div>
       </div>
 
@@ -267,9 +412,16 @@ export default function MarketData() {
               <Area type="monotone" dataKey="close"  stroke={T.accent}  fill="url(#searchGrad)" strokeWidth={2}   dot={false} />
               <Line type="monotone" dataKey="ema20"  stroke="#a78bfa"   strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
               <Line type="monotone" dataKey="ema50"  stroke="#60a5fa"   strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+              {showSearchIndicators && <>
+                <Line type="monotone" dataKey="bb_upper" stroke={T.red}   strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.7} />
+                <Line type="monotone" dataKey="bb_lower" stroke={T.green} strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.7} />
+                <Line type="monotone" dataKey="bb_mid"   stroke={T.muted} strokeWidth={1} dot={false} strokeDasharray="2 3" opacity={0.5} />
+              </>}
             </ComposedChart>
           </ResponsiveContainer>
 
+          {showSearchIndicators && (
+            <>
           {/* RSI */}
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 }}>
@@ -322,6 +474,35 @@ export default function MarketData() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Volume */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 600 }}>
+              Volume
+              <span style={{ marginLeft: 8, color: T.accent, fontWeight: 700 }}>
+                {searchChart[searchChart.length-1]?.volume ? (searchChart[searchChart.length-1].volume / 1e6).toFixed(1) + "M" : "—"}
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={70}>
+              <BarChart data={searchChart}>
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted }}
+                  tickFormatter={d => d?.slice(5,10)}
+                  interval={tickInterval(searchChart.length)} />
+                <YAxis tick={{ fontSize: 9, fill: T.muted }} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} width={40} />
+                <Tooltip
+                  contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 11 }}
+                  formatter={v => [`${(v/1e6).toFixed(2)}M`, "Volume"]}
+                  labelFormatter={l => l?.slice(0,10)} />
+                <Bar dataKey="volume" radius={[2,2,0,0]}>
+                  {searchChart.map((d, i) => (
+                    <Cell key={i} fill={i > 0 && d.close >= searchChart[i-1]?.close ? T.green : T.red} opacity={0.7} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+            </>
+          )}
         </>
       ) : (
         <div style={{ textAlign: "center", padding: "32px 0", color: T.muted }}>Loading chart...</div>
@@ -359,13 +540,15 @@ export default function MarketData() {
       </div>
 
       {/* ── Stock Chart ── */}
-      <div style={{ ...s.card, marginBottom: 20 }}>
+      <div style={{ ...s.card, marginBottom: 20 }} className="ng-glow-card">
 
         {/* Chart Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={s.h3}>{selSym}</div>
-            <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 10 }}>LIVE</span>
+            <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 10, display: "inline-flex", alignItems: "center" }}>
+              <span className="ng-live-dot" style={{ width: 6, height: 6, marginRight: 4 }} />LIVE
+            </span>
             {histLoading && <span style={{ fontSize: 12, color: T.muted }}>Loading...</span>}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -732,6 +915,94 @@ export default function MarketData() {
               </button>
             </div>
 
+            {/* ── NEW: Single Stock ML Search ── */}
+            <div style={{ marginBottom: 20, padding: "14px 16px", background: T.surface, borderRadius: 10, border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 10 }}>
+                🔍 Predict Any Stock
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  style={{ ...s.input, flex: 1, marginTop: 0, padding: "8px 12px", fontFamily: "monospace" }}
+                  placeholder="e.g. AAPL, Tesla, Nvidia..."
+                  value={mlSearch}
+                  onChange={e => setMlSearch(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && searchML()}
+                />
+                <button
+                  onClick={searchML}
+                  disabled={mlSearchLoading}
+                  style={{ ...s.navItem, ...s.navItemActive, padding: "8px 20px", fontSize: 13, opacity: mlSearchLoading ? 0.6 : 1 }}>
+                  {mlSearchLoading ? "⏳ Running..." : "🤖 Predict"}
+                </button>
+                {mlResult && (
+                  <button
+                    onClick={() => { setMlResult(null); setMlSearch(""); setMlSearchError(null); }}
+                    style={{ ...s.navItem, fontSize: 12, padding: "8px 12px" }}>
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Error */}
+              {mlSearchError && (
+                <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#450a0a", border: `1px solid ${T.red}`, fontSize: 12, color: T.red }}>
+                  ⚠️ {mlSearchError}
+                </div>
+              )}
+
+              {/* Result Card */}
+              {mlResult && !mlSearchError && (
+                <>
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10 }}>
+                  {[
+                    ["Symbol",     mlResult.symbol,                               T.accent],
+                    ["Price",      `$${Number(mlResult.price).toFixed(2)}`,        T.accent],
+                    ["Signal",     mlResult.signal,                                sigColor(mlResult.signal)],
+                    ["UP Prob",    `${Number(mlResult.up_prob).toFixed(1)}%`,      Number(mlResult.up_prob) >= 65 ? T.green : Number(mlResult.up_prob) >= 55 ? T.amber : T.muted],
+                    ["Confidence", mlResult.confidence,                            mlResult.confidence === "HIGH" ? T.green : mlResult.confidence === "MEDIUM" ? T.amber : T.red],
+                  ].map(([label, val, col]) => (
+                    <div key={label} style={{ background: T.card, borderRadius: 8, padding: "10px 12px", border: `1px solid ${T.border}`, textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", marginBottom: 4, letterSpacing: "0.05em" }}>{label}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: col, fontFamily: label === "Symbol" ? "monospace" : "inherit" }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Simple visual graph: UP vs DOWN probability ── */}
+                <div style={{ marginTop: 16, background: T.card, borderRadius: 8, padding: "14px 16px", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {mlResult.symbol} — Next-Move Probability
+                  </div>
+                  <ResponsiveContainer width="100%" height={90}>
+                    <BarChart
+                      layout="vertical"
+                      data={[
+                        { name: "UP",   value: Number(mlResult.up_prob) },
+                        { name: "DOWN", value: 100 - Number(mlResult.up_prob) },
+                      ]}
+                      margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
+                    >
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: T.muted }} tickFormatter={v => `${v}%`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: T.muted, fontWeight: 600 }} width={50} />
+                      <Tooltip
+                        contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12 }}
+                        formatter={v => [`${Number(v).toFixed(1)}%`, "Probability"]} />
+                      <Bar dataKey="value" radius={[0,4,4,0]} barSize={26}>
+                        <Cell fill={T.green} />
+                        <Cell fill={T.red} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div style={{ fontSize: 11, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>
+                    Model ka andaza hai <strong style={{ color: sigColor(mlResult.signal) }}>{mlResult.signal}</strong> —
+                    {" "}yani agle 2 din mein price <strong style={{ color: T.green }}>{Number(mlResult.up_prob).toFixed(1)}%</strong> chance
+                    upar jaane ka aur <strong style={{ color: T.red }}>{(100 - Number(mlResult.up_prob)).toFixed(1)}%</strong> chance neeche/flat rehne ka.
+                  </div>
+                </div>
+                </>
+              )}
+            </div>
+
             {/* Summary Cards */}
             {!mlLoading && mlSignals.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
@@ -821,10 +1092,7 @@ export default function MarketData() {
 
             {/* Disclaimer */}
             {!mlLoading && mlSignals.length > 0 && (
-              <div style={{ marginTop: 14, padding: "10px 14px", background: T.surface, borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>
-                🛡️ <strong>Disclaimer:</strong> ML predictions are based on historical patterns. Not financial advice.
-                Model: XGBoost · Accuracy: 53.3% · Train: 5 years · Features: 16 indicators.
-                Improve: <code style={{ background: T.border, padding: "1px 5px", borderRadius: 3 }}>python ml/train.py --model hybrid</code>
+              <div>
               </div>
             )}
           </div>

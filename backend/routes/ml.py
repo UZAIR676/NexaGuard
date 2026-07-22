@@ -8,8 +8,8 @@ warnings.filterwarnings('ignore')
 
 router = APIRouter(prefix="/api/ml", tags=["ml"])
 
-MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
-SEQ_LEN = 60
+MODELS_DIR   = os.path.join(os.path.dirname(__file__), '..', 'models')
+SEQ_LEN      = 60
 FEATURE_COLS = [
     'Returns', 'HL_ratio', 'OC_ratio',
     'SMA_10', 'SMA_20', 'SMA_50',
@@ -19,38 +19,111 @@ FEATURE_COLS = [
     'ATR', 'Momentum'
 ]
 
-# ── Model Load (ek baar) ───────────────────────────────────────────────────
+# ── LSTM Compatibility Patch ───────────────────────────────────────────────
+def _load_lstm_safe(path):
+    """
+    Purane models mein 'batch_shape' hota tha, naye TF mein 'batch_input_shape'.
+    Pehle normal load try karo, fail hone par custom_objects + compile=False se try.
+    """
+    from tensorflow.keras.models import load_model as keras_load
+    import tensorflow as tf
+
+    # Try 1: Normal load
+    try:
+        return keras_load(path)
+    except Exception:
+        pass
+
+    # Try 2: compile=False (ignore optimizer state)
+    try:
+        return keras_load(path, compile=False)
+    except Exception:
+        pass
+
+    # Try 3: Rebuild from weights — batch_shape issue ka permanent fix
+    try:
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization, Input
+
+        # Config file se architecture padho
+        config_path = os.path.join(MODELS_DIR, 'nexaguard_config.json')
+        with open(config_path) as f:
+            cfg = json.load(f)
+        n_features = len(cfg.get('features', FEATURE_COLS))
+        seq_len    = cfg.get('seq_len', SEQ_LEN)
+
+        model = Sequential([
+            Input(shape=(seq_len, n_features)),
+            LSTM(128, return_sequences=True),
+            Dropout(0.3),
+            BatchNormalization(),
+            LSTM(64, return_sequences=True),
+            Dropout(0.3),
+            BatchNormalization(),
+            LSTM(32, return_sequences=False),
+            Dropout(0.2),
+            Dense(16, activation='relu'),
+            Dense(1,  activation='sigmoid')
+        ])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+        # .keras format — weights alag file nahi hoti, try h5 fallback
+        h5_path = path.replace('.keras', '.h5')
+        if os.path.exists(h5_path):
+            model.load_weights(h5_path)
+            print("⚠️ Loaded weights from .h5 fallback")
+            return model
+
+        print("⚠️ Architecture rebuild ho gayi lekin weights load nahi hue — retrain karo")
+        return None
+    except Exception as e:
+        print(f"❌ LSTM load completely failed: {e}")
+        return None
+
+# ── Model Load (ek baar startup pe) ───────────────────────────────────────
 def load_model():
     config_path = os.path.join(MODELS_DIR, 'nexaguard_config.json')
     if not os.path.exists(config_path):
         return None, None, None
-    
+
     with open(config_path) as f:
         config = json.load(f)
-    
+
     model_type = config.get('model_type', 'lstm')
-    scalers = joblib.load(os.path.join(MODELS_DIR, 'nexaguard_scalers.pkl'))
-    
+
+    scalers_path = os.path.join(MODELS_DIR, 'nexaguard_scalers.pkl')
+    if not os.path.exists(scalers_path):
+        return None, None, model_type
+    scalers = joblib.load(scalers_path)
+
     if model_type == 'lstm':
-        from tensorflow.keras.models import load_model as keras_load
-        model = keras_load(os.path.join(MODELS_DIR, 'nexaguard_lstm.keras'))
+        model = _load_lstm_safe(os.path.join(MODELS_DIR, 'nexaguard_lstm.keras'))
+
     elif model_type == 'xgboost':
         model = joblib.load(os.path.join(MODELS_DIR, 'nexaguard_xgb.pkl'))
+
     elif model_type == 'hybrid':
-        lstm_m = None
-        xgb_m = joblib.load(os.path.join(MODELS_DIR, 'nexaguard_xgb.pkl'))
-        try:
-            from tensorflow.keras.models import load_model as keras_load
-            lstm_m = keras_load(os.path.join(MODELS_DIR, 'nexaguard_lstm.keras'))
-        except:
-            pass
-        model = {'lstm': lstm_m, 'xgb': xgb_m}
-    
+        xgb_m  = joblib.load(os.path.join(MODELS_DIR, 'nexaguard_xgb.pkl'))
+        lstm_m = _load_lstm_safe(os.path.join(MODELS_DIR, 'nexaguard_lstm.keras'))
+        model  = {'lstm': lstm_m, 'xgb': xgb_m}
+
+    else:
+        model = None
+
     return model, scalers, model_type
 
-MODEL, SCALERS, MODEL_TYPE = load_model()
+print("🔄 Loading ML model...")
+try:
+    MODEL, SCALERS, MODEL_TYPE = load_model()
+    if MODEL is not None:
+        print(f"✅ ML Model loaded! Type: {MODEL_TYPE}")
+    else:
+        print("⚠️ ML Model not loaded — XGBoost use hoga agar available ho")
+except Exception as e:
+    print(f"⚠️ ML load error: {e}")
+    MODEL, SCALERS, MODEL_TYPE = None, None, None
 
-# ── Feature Engineering (train.py se same) ────────────────────────────────
+# ── Feature Engineering ────────────────────────────────────────────────────
 def add_features(df):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -66,9 +139,9 @@ def add_features(df):
     df['MACD']        = df['EMA_12'] - df['EMA_26']
     df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_hist']   = df['MACD'] - df['MACD_signal']
-    delta = df['Close'].diff()
-    gain  = delta.where(delta > 0, 0).rolling(14).mean()
-    loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    delta             = df['Close'].diff()
+    gain              = delta.where(delta > 0, 0).rolling(14).mean()
+    loss              = (-delta.where(delta < 0, 0)).rolling(14).mean()
     df['RSI']         = 100 - (100 / (1 + gain / loss))
     sma20             = df['Close'].rolling(20).mean()
     std20             = df['Close'].rolling(20).std()
@@ -86,59 +159,57 @@ def add_features(df):
     df['Momentum']    = df['Close'].pct_change(10)
     return df.dropna()
 
-# ── Predict ────────────────────────────────────────────────────────────────
+# ── Predict Core ───────────────────────────────────────────────────────────
 def predict_symbol(sym: str):
     if MODEL is None:
-        return {"error": "Model not trained yet. Run: python ml/train.py"}
-    
-    # Fresh data download
+        return {"error": "Model not loaded. Run: python ml/train.py --model xgboost"}
+
     df = yf.download(sym, period='6mo', progress=False, auto_adjust=True)
     if len(df) < SEQ_LEN + 10:
         return {"error": f"Not enough data for {sym}"}
-    
+
     df = add_features(df)
     if len(df) < SEQ_LEN:
-        return {"error": "Not enough processed data"}
-    
-    # Scaler — trained symbol ka use karo, warna generic
-    scaler = SCALERS.get(sym)
-    if scaler is None:
-        # Pehle available scaler se fit karo
-        scaler = list(SCALERS.values())[0]
-    
+        return {"error": "Not enough processed data after feature engineering"}
+
+    scaler = SCALERS.get(sym) or list(SCALERS.values())[0]
     scaled = scaler.transform(df[FEATURE_COLS])
     seq    = scaled[-SEQ_LEN:].reshape(1, SEQ_LEN, len(FEATURE_COLS))
-    
+
     current_price = float(df['Close'].iloc[-1])
-    
-    # Predict
+
+    # ── Predict by model type ──────────────────────────────────────────────
     if MODEL_TYPE == 'lstm':
+        if MODEL is None:
+            return {"error": "LSTM model failed to load — retrain: python ml/train.py --model xgboost"}
         prob = float(MODEL.predict(seq, verbose=0)[0][0])
+
     elif MODEL_TYPE == 'xgboost':
         prob = float(MODEL.predict_proba(seq[:, -1, :])[0][1])
+
     elif MODEL_TYPE == 'hybrid':
         probs = []
         if MODEL.get('lstm'):
             probs.append(float(MODEL['lstm'].predict(seq, verbose=0)[0][0]) * 0.6)
         if MODEL.get('xgb'):
             probs.append(float(MODEL['xgb'].predict_proba(seq[:, -1, :])[0][1]) * 0.4)
+        if not probs:
+            return {"error": "Hybrid model ke dono components load nahi hue"}
         prob = sum(probs)
-    
+
     up_prob = round(prob * 100, 2)
-    
-    if prob >= 0.65:
-        signal     = "BUY"
-        confidence = "HIGH"
+
+    if prob >= 0.60:
+        signal, confidence = "BUY", "HIGH"
     elif prob >= 0.55:
-        signal     = "BUY"
-        confidence = "MEDIUM"
+        signal, confidence = "BUY", "MEDIUM"
     elif prob <= 0.35:
-        signal     = "SELL"
-        confidence = "HIGH" if prob <= 0.25 else "MEDIUM"
+        signal, confidence = "SELL", "HIGH"
+    elif prob <= 0.40:
+        signal, confidence = "SELL", "MEDIUM"
     else:
-        signal     = "HOLD"
-        confidence = "LOW"
-    
+        signal, confidence = "HOLD", "LOW"
+
     return {
         "symbol":     sym,
         "price":      current_price,
@@ -168,7 +239,6 @@ def scan_market():
                 results.append(r)
         except Exception as e:
             print(f"⚠️ {sym}: {e}")
-    
     results.sort(key=lambda x: x.get("up_prob", 0), reverse=True)
     return results
 

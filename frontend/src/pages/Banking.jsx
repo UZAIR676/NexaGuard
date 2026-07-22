@@ -49,72 +49,6 @@ function useCountUp(value, duration = 600) {
   return display;
 }
 
-function estimateRisk({ amount, to_email }) {
-  const amt = parseFloat(amount) || 0;
-  let score = 0;
-  if (amt > 10000) score += 55;
-  else if (amt > 5000) score += 38;
-  else if (amt > 1000) score += 18;
-  else if (amt > 0) score += 6;
-
-  if (to_email) {
-    const freeDomains = ["tempmail", "guerrilla", "yopmail", "mailinator"];
-    if (freeDomains.some((d) => to_email.toLowerCase().includes(d))) score += 30;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to_email)) score += 10;
-  }
-  score += Math.min(8, amt % 7);
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
-
-function riskMeta(score) {
-  if (score >= 70) return { label: "High Risk", color: "#ef4444" };
-  if (score >= 35) return { label: "Medium Risk", color: "#f59e0b" };
-  return { label: "Low Risk", color: "#22c55e" };
-}
-
-function RiskGauge({ score }) {
-  const meta = riskMeta(score);
-  const r = 54;
-  const circumference = Math.PI * r;
-  const offset = circumference - (score / 100) * circumference;
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-      <svg width="130" height="74" viewBox="0 0 130 74">
-        <path
-          d="M 8 70 A 54 54 0 0 1 122 70"
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="10"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 8 70 A 54 54 0 0 1 122 70"
-          fill="none"
-          stroke={meta.color}
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.5s ease, stroke 0.4s ease" }}
-        />
-        <text x="65" y="58" textAnchor="middle" fontSize="22" fontWeight="700" fill={T.text}>
-          {score}
-        </text>
-      </svg>
-      <div>
-        <div style={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          Live Risk Preview
-        </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: meta.color }}>{meta.label}</div>
-        <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>
-          Final score is calculated by NexaGuard AI on submit
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Daily limit progress bar
 function DailyLimitBar({ used, limit, label, color }) {
   const pct = Math.min(100, (used / limit) * 100);
@@ -428,9 +362,6 @@ export default function Banking({ user, onBalanceUpdate }) {
 
   const recentAmounts = txns.slice(0, 8).reverse().map((t) => t.amount || 0);
 
-  const risk = estimateRisk(sendForm);
-  const riskInfo = riskMeta(risk);
-
   const swRemaining = Math.max(0, DAILY_LIMIT_SEND_WITHDRAW - dailyUsed.sendWithdraw);
   const depRemaining = Math.max(0, DAILY_LIMIT_DEPOSIT - dailyUsed.deposit);
 
@@ -471,11 +402,6 @@ export default function Banking({ user, onBalanceUpdate }) {
           gap: 16px;
         }
         .ng-balance-amount { font-size: 48px; }
-        .ng-send-row {
-          display: flex;
-          gap: 20px;
-          flex-wrap: wrap;
-        }
         .ng-tabs {
           display: flex;
           gap: 4px;
@@ -490,7 +416,6 @@ export default function Banking({ user, onBalanceUpdate }) {
           .ng-stats-grid { grid-template-columns: 1fr 1fr; }
           .ng-balance-amount { font-size: 34px !important; letter-spacing: -1px !important; }
           .ng-balance-icon { display: none; }
-          .ng-send-row { flex-direction: column; }
           .ng-tab-btn { font-size: 13px !important; padding: 8px 10px !important; }
         }
 
@@ -897,8 +822,8 @@ export default function Banking({ user, onBalanceUpdate }) {
 
       {/* Send Money Tab */}
       {tab === "send" && (
-        <div className="ng-send-row">
-          <div className="ng-glass ng-fade" style={{ ...s.card, maxWidth: 480, flex: "1 1 300px", borderRadius: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div className="ng-glass ng-fade" style={{ ...s.card, width: "100%", maxWidth: 480, borderRadius: 16 }}>
             <div style={s.h3}>↑ Send Money</div>
             <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
               Transfer funds to another NexaGuard user
@@ -971,127 +896,109 @@ export default function Banking({ user, onBalanceUpdate }) {
               {loading ? "Processing..." : "Send Money ↑"}
             </button>
           </div>
-
-          {/* Live risk preview */}
-          <div className="ng-glass ng-fade" style={{ ...s.card, flex: "1 1 240px", maxWidth: 320, borderRadius: 16 }}>
-            <div style={{ ...s.h3, fontSize: 15, marginBottom: 14 }}>🛡️ Risk Preview</div>
-            <RiskGauge score={risk} />
-            <div
-              style={{
-                marginTop: 18,
-                fontSize: 12,
-                color: T.muted,
-                lineHeight: 1.6,
-                borderTop: `1px solid ${T.border}`,
-                paddingTop: 14,
-              }}
-            >
-              Based on amount and recipient pattern. Actual score is calculated by NexaGuard's ML model
-              ({riskInfo.label.toLowerCase()} signals detected).
-              {risk >= 35 && (
-                <> If medium-risk, you'll get an email confirm link — unless Face ID is verified.</>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
       {/* Deposit Tab */}
       {tab === "deposit" && (
-        <div className="ng-glass ng-fade" style={{ ...s.card, maxWidth: 480, borderRadius: 16 }}>
-          <div style={s.h3}>+ Deposit</div>
-          <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>Add funds to your account</div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div className="ng-glass ng-fade" style={{ ...s.card, width: "100%", maxWidth: 480, borderRadius: 16 }}>
+            <div style={s.h3}>+ Deposit</div>
+            <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>Add funds to your account</div>
 
-          <label style={s.label}>Amount (USD)</label>
-          <input
-            style={s.input}
-            type="number"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onFocus={(e) => (e.target.style.borderColor = T.accent)}
-            onBlur={(e) => (e.target.style.borderColor = T.border)}
-          />
+            <label style={s.label}>Amount (USD)</label>
+            <input
+              style={s.input}
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = T.accent)}
+              onBlur={(e) => (e.target.style.borderColor = T.border)}
+            />
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            {[100, 500, 1000, 5000].map((a) => (
-              <button
-                key={a}
-                onClick={() => setAmount(String(a))}
-                style={{ ...s.navItem, ...s.navItemActive, fontSize: 13 }}
-              >
-                +${a.toLocaleString()}
-              </button>
-            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {[100, 500, 1000, 5000].map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setAmount(String(a))}
+                  style={{ ...s.navItem, ...s.navItemActive, fontSize: 13 }}
+                >
+                  +${a.toLocaleString()}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
+              Daily deposit remaining: <strong style={{ color: depRemaining > 0 ? T.text : T.red }}>${depRemaining.toLocaleString()}</strong>
+            </div>
+
+            <button
+              style={{ ...s.btn, marginTop: 20, background: T.green, opacity: loading ? 0.7 : 1 }}
+              onClick={() => doTransaction("deposit", amount)}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "+ Deposit Funds"}
+            </button>
           </div>
-
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
-            Daily deposit remaining: <strong style={{ color: depRemaining > 0 ? T.text : T.red }}>${depRemaining.toLocaleString()}</strong>
-          </div>
-
-          <button
-            style={{ ...s.btn, marginTop: 20, background: T.green, opacity: loading ? 0.7 : 1 }}
-            onClick={() => doTransaction("deposit", amount)}
-            disabled={loading}
-          >
-            {loading ? "Processing..." : "+ Deposit Funds"}
-          </button>
         </div>
       )}
 
       {/* Withdraw Tab */}
       {tab === "withdraw" && (
-        <div className="ng-glass ng-fade" style={{ ...s.card, maxWidth: 480, borderRadius: 16 }}>
-          <div style={s.h3}>− Withdraw</div>
-          <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>Withdraw funds from your account</div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div className="ng-glass ng-fade" style={{ ...s.card, width: "100%", maxWidth: 480, borderRadius: 16 }}>
+            <div style={s.h3}>− Withdraw</div>
+            <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>Withdraw funds from your account</div>
 
-          <label style={s.label}>Amount (USD)</label>
-          <input
-            style={s.input}
-            type="number"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onFocus={(e) => (e.target.style.borderColor = T.accent)}
-            onBlur={(e) => (e.target.style.borderColor = T.border)}
-          />
+            <label style={s.label}>Amount (USD)</label>
+            <input
+              style={s.input}
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onFocus={(e) => (e.target.style.borderColor = T.accent)}
+              onBlur={(e) => (e.target.style.borderColor = T.border)}
+            />
 
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
-            Available: <strong style={{ color: T.text }}>${balance.toLocaleString()}</strong>
-            {" · "}
-            Daily remaining: <strong style={{ color: swRemaining > 0 ? T.text : T.red }}>${swRemaining.toLocaleString()}</strong>
-          </div>
-
-          {faceRegistered && parseFloat(amount || 0) >= FACE_VERIFY_THRESHOLD && (
-            <div
-              style={{
-                fontSize: 12,
-                color: "#60a5fa",
-                marginTop: 10,
-                padding: "8px 12px",
-                background: "rgba(96,165,250,0.10)",
-                border: "1px solid rgba(96,165,250,0.25)",
-                borderRadius: 8,
-              }}
-            >
-              🛡️ This amount requires Face ID verification before withdrawing. Fraud block will be bypassed after verification.
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
+              Available: <strong style={{ color: T.text }}>${balance.toLocaleString()}</strong>
+              {" · "}
+              Daily remaining: <strong style={{ color: swRemaining > 0 ? T.text : T.red }}>${swRemaining.toLocaleString()}</strong>
             </div>
-          )}
 
-          <button
-            style={{
-              ...s.btn,
-              marginTop: 20,
-              background: "rgba(239,68,68,0.2)",
-              color: T.red,
-              border: `1px solid rgba(239,68,68,0.3)`,
-              opacity: loading ? 0.7 : 1,
-            }}
-            onClick={() => requestTransaction("withdraw", amount)}
-            disabled={loading}
-          >
-            {loading ? "Processing..." : "− Withdraw Funds"}
-          </button>
+            {faceRegistered && parseFloat(amount || 0) >= FACE_VERIFY_THRESHOLD && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#60a5fa",
+                  marginTop: 10,
+                  padding: "8px 12px",
+                  background: "rgba(96,165,250,0.10)",
+                  border: "1px solid rgba(96,165,250,0.25)",
+                  borderRadius: 8,
+                }}
+              >
+                🛡️ This amount requires Face ID verification before withdrawing. Fraud block will be bypassed after verification.
+              </div>
+            )}
+
+            <button
+              style={{
+                ...s.btn,
+                marginTop: 20,
+                background: "rgba(239,68,68,0.2)",
+                color: T.red,
+                border: `1px solid rgba(239,68,68,0.3)`,
+                opacity: loading ? 0.7 : 1,
+              }}
+              onClick={() => requestTransaction("withdraw", amount)}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "− Withdraw Funds"}
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -25,8 +25,6 @@
 
 NexaGuard is an enterprise-grade financial security and market intelligence platform built for the **US market**. It combines **fraud detection AI**, **live stock market analytics**, **LSTM/XGBoost price prediction**, **face biometric authentication**, **real-time geo-IP threat detection**, and a **custom AI financial advisor** — all in one unified full-stack application.
 
-> Built by a solo developer. Runs locally. No paid APIs required.
-
 ---
 
 ## ✨ Feature Overview
@@ -218,7 +216,10 @@ NexaGuard/
 git clone https://github.com/UZAIR676/NexaGuard.git
 cd NexaGuard/backend
 
+
+
 pip install -r requirements.txt
+
 
 # Pull the LLM model for AI advisor
 ollama pull qwen2.5:7b
@@ -228,7 +229,8 @@ python ml/train.py
 python ml/train_banking_model.py
 
 # Start backend
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --reload
+
 ```
 
 ### Frontend

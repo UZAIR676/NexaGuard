@@ -1,16 +1,21 @@
+import os
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import requests
 import json
+import difflib
+from groq import Groq
 
 from services.market_data import get_quote, get_batch_quotes, SP500_TOP50
 from services.technical_indicators import analyze_stock
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "qwen2.5:7b"
+# ── Groq setup ──────────────────────────────────────────────
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+groq_client = Groq(api_key=GROQ_API_KEY)
+MODEL = "llama-3.3-70b-versatile" 
 
 chat_sessions = {}
 
@@ -19,6 +24,7 @@ def get_history(session_id: str):
         chat_sessions[session_id] = []
     return chat_sessions[session_id]
 
+# Broad sector / theme groups -> list of tickers
 SECTOR_MAP = {
     "technology":    ["AAPL", "MSFT", "NVDA", "AMD", "GOOGL"],
     "tech":          ["AAPL", "MSFT", "NVDA", "AMD", "GOOGL"],
@@ -37,33 +43,86 @@ SECTOR_MAP = {
     "social":        ["META", "SNAP"],
     "streaming":     ["NFLX", "SPOT", "ROKU"],
     "ai":            ["NVDA", "MSFT", "GOOGL", "AMD", "PLTR"],
-    "amazon":    ["AMZN"],  "apple":    ["AAPL"],
-    "microsoft": ["MSFT"],  "google":   ["GOOGL"],
-    "alphabet":  ["GOOGL"], "tesla":    ["TSLA"],
-    "nvidia":    ["NVDA"],  "meta":     ["META"],
-    "netflix":   ["NFLX"],  "intel":    ["INTC"],
-    "qualcomm":  ["QCOM"],  "broadcom": ["AVGO"],
-    "walmart":   ["WMT"],   "jpmorgan": ["JPM"],
-    "goldman":   ["GS"],    "palantir": ["PLTR"],
 }
 
-KNOWN_SYMBOLS = set(SP500_TOP50 + [
-    "GOOG","NFLX","CRM","ORCL","ADBE","PYPL","SHOP",
-    "GS","V","MA","CVX","PFE","WMT","COST","DIS",
-    "UBER","LYFT","SNAP","SPOT","SQ","ROKU",
-    "PLTR","COIN","HOOD","SOFI","NIO","BABA","JD","PDD","BIDU",
-])
+# Individual company name (and common aliases) -> single ticker.
+# Add new companies here in ONE place — KNOWN_SYMBOLS builds itself from this.
+COMPANY_MAP = {
+    "amazon": "AMZN", "amzn": "AMZN",
+    "apple": "AAPL", "aapl": "AAPL",
+    "microsoft": "MSFT", "msft": "MSFT",
+    "google": "GOOGL", "alphabet": "GOOGL", "googl": "GOOGL",
+    "tesla": "TSLA", "tsla": "TSLA",
+    "nvidia": "NVDA", "nvda": "NVDA",
+    "meta": "META", "facebook": "META",
+    "netflix": "NFLX", "nflx": "NFLX",
+    "intel": "INTC",
+    "qualcomm": "QCOM",
+    "broadcom": "AVGO",
+    "walmart": "WMT",
+    "jpmorgan": "JPM", "jp morgan": "JPM",
+    "goldman": "GS", "goldman sachs": "GS",
+    "palantir": "PLTR",
+    "salesforce": "CRM",
+    "oracle": "ORCL",
+    "adobe": "ADBE",
+    "paypal": "PYPL",
+    "shopify": "SHOP",
+    "visa": "V",
+    "mastercard": "MA",
+    "chevron": "CVX",
+    "pfizer": "PFE",
+    "costco": "COST",
+    "disney": "DIS",
+    "uber": "UBER",
+    "lyft": "LYFT",
+    "snapchat": "SNAP", "snap": "SNAP",
+    "spotify": "SPOT",
+    "block": "SQ", "square": "SQ",
+    "roku": "ROKU",
+    "coinbase": "COIN",
+    "robinhood": "HOOD",
+    "sofi": "SOFI",
+    "nio": "NIO",
+    "alibaba": "BABA",
+    "amd": "AMD",
+}
+
+# Built automatically — every ticker mentioned above (plus S&P top 50) is "known"
+KNOWN_SYMBOLS = set(SP500_TOP50) | set(COMPANY_MAP.values())
 
 def extract_symbols(text: str) -> list:
     text_lower = text.lower()
+    words = text_lower.replace("?", " ").replace(",", " ").replace("!", " ").split()
     symbols = set()
+
+    # 1. Direct ticker match (e.g. "AMZN", "NVDA")
     for word in text.upper().split():
         clean = word.strip("?,!.()")
         if clean in KNOWN_SYMBOLS:
             symbols.add(clean)
+
+    # 2. Exact company name match (e.g. "amazon", "tesla")
+    for word in words:
+        clean = word.strip("?,!.()")
+        if clean in COMPANY_MAP:
+            symbols.add(COMPANY_MAP[clean])
+
+    # 3. Fuzzy match to catch typos (e.g. "amzon", "gogle", "teslaa")
+    if not symbols:
+        for word in words:
+            clean = word.strip("?,!.()")
+            if len(clean) < 3:
+                continue
+            close = difflib.get_close_matches(clean, COMPANY_MAP.keys(), n=1, cutoff=0.8)
+            if close:
+                symbols.add(COMPANY_MAP[close[0]])
+
+    # 4. Sector / theme keywords (e.g. "tech stocks", "ai stocks")
     for keyword, stocks in SECTOR_MAP.items():
         if keyword in text_lower:
             symbols.update(stocks)
+
     return list(symbols)[:3]
 
 def build_context(symbols: list) -> str:
@@ -125,12 +184,12 @@ def build_context(symbols: list) -> str:
 SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor backed by real ML-powered technical analysis.
 
 == CRITICAL RULES ==
-1. When "=== LIVE MARKET DATA ===" appears, ALWAYS start your reply with the exact current price.
-2. Use ONLY the numbers provided — never invent prices.
-3. Reference the technical indicators (RSI, MACD, Tech Score, ML Signal) in your answer.
-4. If NO live data exists, say so clearly.
+1. Use the RESPONSE STRUCTURE below ONLY when "=== LIVE MARKET DATA ===" is present in the message — that means the user is asking about a specific stock/ticker.
+2. For everything else — greetings, general questions, opinions, follow-up questions, "should I do this or not", clarifying questions, portfolio strategy talk, or any casual conversation — just reply naturally and directly like a normal helpful advisor. Do NOT force the emoji template on these; answer the actual question being asked.
+3. When live data IS present: use ONLY the numbers provided — never invent prices — and reference the technical indicators (RSI, MACD, Tech Score, ML Signal) in your answer.
+4. If the user clearly wants stock data but none was found, say so clearly and ask them to name the stock/ticker — don't dump an empty template.
 
-== RESPONSE STRUCTURE ==
+== RESPONSE STRUCTURE (only when live stock data is provided) ==
 📍 Current price + today's movement
 📊 Tech Score + RSI + MACD signal
 🤖 ML Prediction signal
@@ -138,7 +197,10 @@ SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor back
 ⚡ Key risk or opportunity
 🛡️ Powered by NexaGuard Intelligence — invest with data, not emotion.
 
-Max 220 words. Be direct. Match user's language (Urdu/English/mix)."""
+Max 220 words. Be direct and conversational — sound like a knowledgeable advisor, not a form.
+
+== LANGUAGE RULE ==
+Always reply ONLY in English, regardless of what language or script the user writes in (Urdu, Roman Urdu, Hindi, mixed, etc.). Never reply in Urdu, Hindi, Devanagari script, or any other language — English only, every time."""
 
 
 class ChatIn(BaseModel):
@@ -146,24 +208,20 @@ class ChatIn(BaseModel):
     session_id: str = "default"
 
 
-def stream_ollama(messages: list, history: list, original_msg: str):
+def stream_groq(messages: list, history: list, original_msg: str):
     full_reply = ""
     try:
-        res = requests.post(
-            OLLAMA_URL,
-            json={"model": MODEL, "messages": messages, "stream": True},
-            stream=True, timeout=120,
+        stream = groq_client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            stream=True,
+            temperature=0.7,
         )
-        for line in res.iter_lines():
-            if not line:
-                continue
-            chunk = json.loads(line.decode("utf-8"))
-            token = chunk.get("message", {}).get("content", "")
+        for chunk in stream:
+            token = chunk.choices[0].delta.content
             if token:
                 full_reply += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
-            if chunk.get("done", False):
-                break
     except Exception as e:
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
     finally:
@@ -190,7 +248,9 @@ def ai_chat(body: ChatIn):
     else:
         user_msg = (
             f"{body.message}\n\n"
-            f"[NO LIVE DATA — inform user and give general analysis only]"
+            f"[No stock symbol detected in this message — if the user is asking a general question, "
+            f"greeting, or having a normal conversation, just respond naturally. Only mention missing "
+            f"live data if they were clearly trying to ask about a specific stock.]"
         )
 
     messages = [{"role": "system", "content": SYSTEM}]
@@ -199,7 +259,7 @@ def ai_chat(body: ChatIn):
     messages.append({"role": "user", "content": user_msg})
 
     return StreamingResponse(
-        stream_ollama(messages, history, body.message),
+        stream_groq(messages, history, body.message),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

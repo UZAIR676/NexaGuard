@@ -1,422 +1,332 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { T, s } from "../theme";
 
 const BASE = "http://localhost:8000";
 
-export default function Settings({ user, onUpdate }) {
-  const token = localStorage.getItem("ng_token");
+// ── Bubble-style toggle switch ─────────────────────────────────────────
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button
+      onClick={() => !disabled && onChange(!checked)}
+      style={{
+        width: 46, height: 26, borderRadius: 999, border: "none",
+        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
+        background: checked ? T.accent : T.border,
+        position: "relative", transition: "background 0.2s", flexShrink: 0, padding: 0,
+      }}
+      aria-pressed={checked}
+    >
+      <span style={{
+        position: "absolute", top: 3, left: checked ? 23 : 3,
+        width: 20, height: 20, borderRadius: "50%", background: "#fff",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "left 0.2s",
+      }} />
+    </button>
+  );
+}
 
-  // Profile
-  const [name, setName]               = useState(user?.name || "");
-  const [currentPw, setCurrentPw]     = useState("");
-  const [newPw, setNewPw]             = useState("");
-  const [profileMsg, setProfileMsg]   = useState("");
-  const [profileErr, setProfileErr]   = useState("");
-  const [profileLoad, setProfileLoad] = useState(false);
+function Row({ icon, title, desc, right }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      gap: 16, padding: "14px 0", borderBottom: `1px solid ${T.border}`,
+    }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ fontSize: 18, marginTop: 1 }}>{icon}</div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
+          {desc && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{desc}</div>}
+        </div>
+      </div>
+      <div style={{ flexShrink: 0 }}>{right}</div>
+    </div>
+  );
+}
 
-  // Face ID
-  const [faceStatus, setFaceStatus]   = useState(null);
-  const [faceStep, setFaceStep]       = useState("idle"); // idle | camera | capturing | processing | done | error
-  const [faceMsg, setFaceMsg]         = useState("");
-  const [faceErr, setFaceErr]         = useState("");
-  const [frames, setFrames]           = useState([]);
+const ACCENTS = ["#4F8EF7", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
 
-  const videoRef  = useRef(null);
-  const streamRef = useRef(null);
+export default function Settings({ user }) {
+  const [token, setToken] = useState(localStorage.getItem("ng_token"));
+  const [prefs, setPrefs] = useState(null);       // null until loaded from backend
+  const [twoFA, setTwoFA] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveErr, setSaveErr] = useState(false);   // NEW: shows a small warning if a save fails
+  const [loadErr, setLoadErr] = useState("");
+  const [sessions, setSessions] = useState(null);
+  const [signOutMsg, setSignOutMsg] = useState("");
+
+  // NEW: refs used to queue/merge rapid notification toggle changes so they
+  // don't race each other and overwrite one another's results.
+  const notifPending = useRef(null);
+  const notifSaving = useRef(false);
 
   useEffect(() => {
-    loadFaceStatus();
-    return () => stopCamera();
+    loadSettings();
+    loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Face Status ──────────────────────────────────────────────────────
-  const loadFaceStatus = async () => {
+  const loadSettings = async () => {
+    setLoadErr("");
     try {
-      const r = await fetch(`${BASE}/api/face/status?token=${token}`);
+      const r = await fetch(`${BASE}/api/settings?token=${token}`);
       const d = await r.json();
-      setFaceStatus(d);
-    } catch { }
+      if (!r.ok) throw new Error(d.detail || "Failed to load settings");
+      setPrefs(d.preferences);
+      setTwoFA(d.two_fa_enabled);
+    } catch (e) {
+      setLoadErr("Settings load nahi ho saki — server check karo");
+    }
+    setLoading(false);
   };
 
-  // ── Camera ───────────────────────────────────────────────────────────
-  const startCamera = async () => {
-    setFaceErr("");
-    setFaceMsg("");
-    setFrames([]);
-    setFaceStep("camera");
+  const loadSessions = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" }
-      });
-      streamRef.current = stream;
-      setTimeout(() => {
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      }, 100);
+      const r = await fetch(`${BASE}/api/settings/sessions?token=${token}`);
+      const d = await r.json();
+      setSessions(Array.isArray(d.sessions) ? d.sessions : null);
     } catch {
-      setFaceErr("Camera access denied — please allow camera access in your browser.");
-      setFaceStep("error");
+      setSessions(null);
     }
   };
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  };
-
-  const captureFrame = () => {
-    if (!videoRef.current) return null;
-    const canvas = document.createElement("canvas");
-    canvas.width  = videoRef.current.videoWidth  || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
-    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
-    return canvas.toDataURL("image/jpeg", 0.8);
-  };
-
-  // ── Register Face ─────────────────────────────────────────────────────
-  const registerFace = async () => {
-    setFaceErr("");
-    setFrames([]);
-    setFaceStep("capturing");
-
-    // Capture 5 frames
-    const captured = [];
-    for (let i = 0; i < 5; i++) {
-      await new Promise(r => setTimeout(r, 700));
-      const frame = captureFrame();
-      if (frame) captured.push(frame);
-      setFrames([...captured]);
-      setFaceMsg(`Capturing ${i + 1}/5 — move your face slightly`);
-    }
-
-    if (captured.length < 3) {
-      setFaceErr("Could not capture enough frames — please try again.");
-      setFaceStep("error");
-      return;
-    }
-
-    setFaceStep("processing");
-    setFaceMsg("Registering face...");
-
+  // Persist a partial preferences patch to the backend (merged server-side).
+  // Used by theme/accent/language/currency — unchanged from before.
+  const persist = async (patch) => {
+    setSaving(true);
+    setSaveErr(false);
     try {
-      // Use the best frame (middle frame)
-      const bestFrame = captured[Math.floor(captured.length / 2)];
-
-    const res = await fetch(`${BASE}/api/face/register`, {
+      const r = await fetch(`${BASE}/api/settings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, image: bestFrame }),
-    }).then(r => r.json());
+        body: JSON.stringify({ token, preferences: patch }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setPrefs(d.preferences);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      } else {
+        setSaveErr(true);
+      }
+    } catch {
+      setSaveErr(true);
+    }
+    setSaving(false);
+  };
 
-    if (res.error) {
-        setFaceErr(`❌ ${res.error}`);
-        setFaceStep("error");
-        return;
+  // NEW: notification toggles now go through a small merge-queue instead of
+  // calling persist() directly. This fixes the race condition where rapid
+  // toggling of multiple switches could overwrite each other.
+  const updateNotif = async (key, val) => {
+    // optimistic UI update — toggle flips immediately
+    setPrefs(p => ({ ...p, notif: { ...p.notif, [key]: val } }));
+
+    notifPending.current = { ...(notifPending.current || {}), [key]: val };
+
+    if (notifSaving.current) return; // a save is already in flight, it'll pick this up
+    notifSaving.current = true;
+    setSaving(true);
+    setSaveErr(false);
+
+    while (notifPending.current) {
+      const toSend = notifPending.current;
+      notifPending.current = null;
+      try {
+        const r = await fetch(`${BASE}/api/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, preferences: { notif: toSend } }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          setPrefs(d.preferences);
+        } else {
+          setSaveErr(true);
+        }
+      } catch {
+        setSaveErr(true);
+      }
     }
 
-    const conf = parseFloat(res.confidence) || 0;
-const pct  = conf <= 1 ? (conf * 100).toFixed(0) : conf.toFixed(0);
-setFaceMsg(`✅ Face ID registered! Confidence: ${pct}%`);
-      setFaceStep("done");
-      stopCamera();
-      loadFaceStatus();
+    notifSaving.current = false;
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
+  const toggleTwoFA = async (val) => {
+    setTwoFA(val); // optimistic
+    try {
+      const r = await fetch(`${BASE}/api/settings/2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, enabled: val }),
+      });
+      const d = await r.json();
+      if (r.ok) setTwoFA(d.two_fa_enabled);
+      else setTwoFA(!val); // revert on failure
     } catch {
-      setFaceErr("Could not connect to server.");
-      setFaceStep("error");
+      setTwoFA(!val);
     }
   };
 
-  // ── Delete Face ───────────────────────────────────────────────────────
-  const deleteFace = async () => {
-    if (!window.confirm("Are you sure you want to remove Face ID?")) return;
+  const signOutOthers = async () => {
+    if (!window.confirm("Sign out of other devices? This rotates your login token.")) return;
+    setSignOutMsg("");
     try {
-      const res = await fetch(`${BASE}/api/face/delete`, {
-        method: "DELETE",
+      const r = await fetch(`${BASE}/api/settings/sign-out-others`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
-      }).then(r => r.json());
-      if (res.success) {
-        setFaceStatus({ ...faceStatus, registered: false });
-        setFaceStep("idle");
-        setFaceMsg("");
-      }
-    } catch { }
-  };
-
-  // ── Profile Update ────────────────────────────────────────────────────
-  const updateProfile = async () => {
-    setProfileErr("");
-    setProfileMsg("");
-    if (!name.trim()) { setProfileErr("Name cannot be empty"); return; }
-    setProfileLoad(true);
-    try {
-      const res = await fetch(`${BASE}/api/auth/update-profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, name, current_password: currentPw, new_password: newPw }),
-      }).then(r => r.json());
-
-      if (res.error || res.detail) {
-        setProfileErr(res.detail || res.error);
+      });
+      const d = await r.json();
+      if (r.ok && d.token) {
+        localStorage.setItem("ng_token", d.token);
+        setToken(d.token);
+        setSignOutMsg("✅ Other sessions signed out — this device stays logged in");
+        loadSessions();
       } else {
-        setProfileMsg("✅ Profile updated!");
-        onUpdate && onUpdate(res.user);
-        setCurrentPw("");
-        setNewPw("");
+        setSignOutMsg(d.detail || "Could not complete request");
       }
     } catch {
-      setProfileErr("Server error");
+      setSignOutMsg("Server se connect nahi ho raha");
     }
-    setProfileLoad(false);
   };
 
-  const isCapturing  = faceStep === "capturing";
-  const isProcessing = faceStep === "processing";
-  const isDone       = faceStep === "done";
-  const isCamera     = faceStep === "camera" || isCapturing;
+  if (loading) {
+    return (
+      <div style={{ maxWidth: 720, margin: "0 auto", color: T.muted, fontSize: 14 }}>
+        Loading settings...
+      </div>
+    );
+  }
+
+  if (loadErr) {
+    return (
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ ...s.card, borderColor: "rgba(239,68,68,0.3)" }}>
+          <div style={{ color: T.red, fontSize: 14, marginBottom: 12 }}>⚠️ {loadErr}</div>
+          <button style={s.btn} onClick={() => { setLoading(true); loadSettings(); }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={s.h2}>Settings</div>
-        <div style={s.muted}>Manage your profile and security</div>
+    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={s.h2}>Settings</div>
+          <div style={s.muted}>App preferences and security</div>
+        </div>
+        {saving && <span style={{ ...s.badge, fontSize: 12 }}>Saving...</span>}
+        {!saving && saved && <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 12 }}>✅ Saved</span>}
+        {!saving && saveErr && <span style={{ ...s.badge, background: "rgba(239,68,68,0.15)", color: T.red, fontSize: 12 }}>⚠️ Save failed</span>}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+      {/* Notifications */}
+      <div style={{ ...s.card, marginBottom: 20 }}>
+        <div style={s.h3}>🔔 Notifications</div>
+        <Row icon="🚨" title="Fraud alerts" desc="Get notified immediately on suspicious activity"
+          right={<Toggle checked={prefs.notif.fraud} onChange={v => updateNotif("fraud", v)} />} />
+        <Row icon="📧" title="Email alerts" desc="Send a copy of important alerts to your email"
+          right={<Toggle checked={prefs.notif.email} onChange={v => updateNotif("email", v)} />} />
+        <Row icon="💰" title="Low balance warning" desc="Alert when balance drops below your threshold"
+          right={<Toggle checked={prefs.notif.lowBalance} onChange={v => updateNotif("lowBalance", v)} />} />
+        <Row icon="📊" title="Weekly summary" desc="A digest of activity every Monday"
+          right={<Toggle checked={prefs.notif.weekly} onChange={v => updateNotif("weekly", v)} />} />
+      </div>
 
-        {/* ── Profile Card ── */}
-        <div style={s.card}>
-          <div style={s.h3}>👤 Profile</div>
-          <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
-            Update your name and password
-          </div>
-
-          <label style={s.label}>Full Name</label>
-          <input style={s.input} value={name}
-            onChange={e => setName(e.target.value)}
-            onFocus={e => e.target.style.borderColor = T.accent}
-            onBlur={e => e.target.style.borderColor = T.border} />
-
-          <label style={s.label}>Email</label>
-          <input style={{ ...s.input, opacity: 0.6 }} value={user?.email} disabled />
-
-          <label style={s.label}>Role</label>
-          <input style={{ ...s.input, opacity: 0.6 }} value={user?.role?.toUpperCase()} disabled />
-
-          <div style={{ borderTop: `1px solid ${T.border}`, margin: "20px 0", paddingTop: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Change Password</div>
-
-            <label style={s.label}>Current Password</label>
-            <input style={s.input} type="password" placeholder="••••••••"
-              value={currentPw} onChange={e => setCurrentPw(e.target.value)}
-              onFocus={e => e.target.style.borderColor = T.accent}
-              onBlur={e => e.target.style.borderColor = T.border} />
-
-            <label style={s.label}>New Password</label>
-            <input style={s.input} type="password" placeholder="••••••••"
-              value={newPw} onChange={e => setNewPw(e.target.value)}
-              onFocus={e => e.target.style.borderColor = T.accent}
-              onBlur={e => e.target.style.borderColor = T.border} />
-          </div>
-
-          {profileErr && (
-            <div style={{ color: T.red, fontSize: 13, marginBottom: 12,
-              padding: "10px 14px", background: "rgba(239,68,68,0.1)",
-              borderRadius: 8, border: `1px solid rgba(239,68,68,0.2)` }}>
-              {profileErr}
+      {/* Appearance */}
+      <div style={{ ...s.card, marginBottom: 20 }}>
+        <div style={s.h3}>🎨 Appearance</div>
+        <Row icon="🌗" title="Theme" desc="Switch between dark and light mode"
+          right={
+            <div style={{ display: "flex", gap: 6, background: T.surface, borderRadius: 999, padding: 3, border: `1px solid ${T.border}` }}>
+              {["dark", "light"].map(t => (
+                <button key={t} onClick={() => persist({ theme: t })}
+                  style={{
+                    padding: "6px 14px", borderRadius: 999, border: "none", cursor: "pointer",
+                    fontSize: 12, fontWeight: 600, textTransform: "capitalize",
+                    background: prefs.theme === t ? T.accent : "transparent",
+                    color: prefs.theme === t ? "#fff" : T.muted,
+                  }}>
+                  {t === "dark" ? "🌙" : "☀️"} {t}
+                </button>
+              ))}
             </div>
-          )}
-          {profileMsg && (
-            <div style={{ color: T.green, fontSize: 13, marginBottom: 12,
-              padding: "10px 14px", background: "rgba(34,197,94,0.1)",
-              borderRadius: 8, border: `1px solid rgba(34,197,94,0.2)` }}>
-              {profileMsg}
+          } />
+        <Row icon="🎯" title="Accent color" desc="Used for buttons, highlights and badges"
+          right={
+            <div style={{ display: "flex", gap: 8 }}>
+              {ACCENTS.map(c => (
+                <button key={c} onClick={() => persist({ accent: c })}
+                  style={{
+                    width: 22, height: 22, borderRadius: "50%", background: c, cursor: "pointer",
+                    border: prefs.accent === c ? `2px solid ${T.text || "#fff"}` : "2px solid transparent",
+                    boxShadow: prefs.accent === c ? `0 0 0 2px ${c}55` : "none",
+                  }} />
+              ))}
             </div>
-          )}
+          } />
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 10 }}>
+          Theme/accent are saved to your account now — hooking them up to actually re-skin the
+          app live is a separate step (would live in <code>theme.js</code>).
+        </div>
+      </div>
 
-          <button style={{ ...s.btn, opacity: profileLoad ? 0.7 : 1 }}
-            onClick={updateProfile} disabled={profileLoad}>
-            {profileLoad ? "Saving..." : "Save Changes"}
+      {/* Security */}
+      <div style={{ ...s.card, marginBottom: 20 }}>
+        <div style={s.h3}>🛡️ Security</div>
+        <Row icon="🔒" title="Two-factor authentication" desc="Extra verification code at login, in addition to Face ID"
+          right={<Toggle checked={twoFA} onChange={toggleTwoFA} />} />
+        <div style={{ fontSize: 11, color: T.muted, padding: "4px 0 10px" }}>
+          Currently just stores the preference — enforcing an OTP step at login is a follow-up
+          change in <code>routes/auth.py</code>'s <code>login()</code>.
+        </div>
+
+        <div style={{ padding: "14px 0" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>💻 Active sessions</div>
+          {(sessions || [{ device: "This device", location: "Current session", current: true }]).map((sess, i) => (
+            <div key={i} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "10px 12px", background: T.surface, borderRadius: 8,
+              border: `1px solid ${T.border}`, marginBottom: 8, fontSize: 13,
+            }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>{sess.device || "Unknown device"}</div>
+                <div style={{ color: T.muted, fontSize: 12 }}>{sess.location || "Unknown location"}</div>
+              </div>
+              {sess.current && <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 11 }}>This device</span>}
+            </div>
+          ))}
+          <button style={{ ...s.btn, ...s.btnSec, marginTop: 4 }} onClick={signOutOthers}>
+            Sign out of other devices
           </button>
+          {signOutMsg && <div style={{ fontSize: 12, color: T.muted, marginTop: 8 }}>{signOutMsg}</div>}
         </div>
+      </div>
 
-        {/* ── Face ID Card ── */}
-        <div style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={s.h3}>🔐 Face ID</div>
-            {faceStatus?.registered && (
-              <span style={{ ...s.badge, ...s.badgeGreen }}>✅ Registered</span>
-            )}
-          </div>
-          <div style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
-            FaceNet Deep Learning — fully local, banking-grade security
-          </div>
+      {/* Language & Region */}
+      <div style={s.card}>
+        <div style={s.h3}>🌐 Language & Region</div>
+        <label style={s.label}>Language</label>
+        <select style={s.input} value={prefs.language} onChange={e => persist({ language: e.target.value })}>
+          <option value="en">English</option>
+          <option value="ur">اردو (Urdu)</option>
+          <option value="hi">हिन्दी (Hindi)</option>
+        </select>
 
-          {/* Status */}
-          {faceStatus?.registered ? (
-            <div style={{
-              padding: "14px 16px", borderRadius: 10, marginBottom: 16,
-              background: "rgba(34,197,94,0.08)",
-              border: `1px solid rgba(34,197,94,0.2)`
-            }}>
-              <div style={{ fontSize: 13, color: T.green, fontWeight: 600 }}>
-                ✅ Face ID is active
-              </div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>
-                Your face will be automatically verified on login
-              </div>
-            </div>
-          ) : (
-            <div style={{
-              padding: "14px 16px", borderRadius: 10, marginBottom: 16,
-              background: "rgba(245,158,11,0.08)",
-              border: `1px solid rgba(245,158,11,0.2)`
-            }}>
-              <div style={{ fontSize: 13, color: T.amber, fontWeight: 600 }}>
-                ⚠️ Face ID is not registered
-              </div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>
-                Register it to add extra security at login
-              </div>
-            </div>
-          )}
-
-          {/* Camera Section */}
-          {isCamera && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{
-                position: "relative", borderRadius: 12, overflow: "hidden",
-                border: `2px solid ${isDone ? T.green : T.accent}`,
-                background: "#000", aspectRatio: "4/3", marginBottom: 12
-              }}>
-                <video ref={videoRef} autoPlay playsInline muted
-                  style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
-
-                {/* Face guide oval */}
-                <div style={{
-                  position: "absolute", top: "50%", left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: "55%", aspectRatio: "3/4",
-                  border: `2px dashed rgba(255,255,255,0.5)`,
-                  borderRadius: "50%", pointerEvents: "none"
-                }} />
-
-                {/* Status */}
-                {faceMsg && (
-                  <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center" }}>
-                    <span style={{
-                      background: "rgba(0,0,0,0.75)", color: "#fff",
-                      padding: "5px 14px", borderRadius: 20, fontSize: 12
-                    }}>
-                      {faceMsg}
-                    </span>
-                  </div>
-                )}
-
-                {/* Frame dots */}
-                <div style={{
-                  position: "absolute", top: 10, left: 0, right: 0,
-                  display: "flex", justifyContent: "center", gap: 6
-                }}>
-                  {[0,1,2,3,4].map(i => (
-                    <div key={i} style={{
-                      width: 8, height: 8, borderRadius: "50%",
-                      background: frames.length > i ? T.green : "rgba(255,255,255,0.3)",
-                      transition: "background 0.3s"
-                    }} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div style={{
-                fontSize: 12, color: T.muted, lineHeight: 1.7,
-                padding: "10px 14px", background: T.surface,
-                borderRadius: 8, border: `1px solid ${T.border}`, marginBottom: 12
-              }}>
-                📋 Sit directly facing the camera · Make sure lighting is good · Move your face slightly
-              </div>
-            </div>
-          )}
-
-          {/* Done message */}
-          {isDone && faceMsg && (
-            <div style={{
-              color: T.green, fontSize: 13, marginBottom: 16,
-              padding: "12px 16px", background: "rgba(34,197,94,0.1)",
-              borderRadius: 8, border: `1px solid rgba(34,197,94,0.2)`
-            }}>
-              {faceMsg}
-            </div>
-          )}
-
-          {/* Error */}
-          {faceErr && (
-            <div style={{
-              color: T.red, fontSize: 13, marginBottom: 16,
-              padding: "12px 16px", background: "rgba(239,68,68,0.1)",
-              borderRadius: 8, border: `1px solid rgba(239,68,68,0.2)`
-            }}>
-              {faceErr}
-            </div>
-          )}
-
-          {/* Buttons */}
-          <div style={{ display: "flex", gap: 10, flexDirection: "column" }}>
-            {faceStep === "idle" && !faceStatus?.registered && (
-              <button style={s.btn} onClick={startCamera}>
-                📷 Set Up Face ID
-              </button>
-            )}
-
-            {faceStep === "camera" && (
-              <button style={s.btn} onClick={registerFace}>
-                📸 Capture & Register
-              </button>
-            )}
-
-            {(isCapturing || isProcessing) && (
-              <button style={{ ...s.btn, opacity: 0.7 }} disabled>
-                {isCapturing ? `Capturing ${frames.length}/5...` : "Processing..."}
-              </button>
-            )}
-
-            {faceStatus?.registered && faceStep === "idle" && (
-              <>
-                <button style={s.btn} onClick={startCamera}>
-                  🔄 Update Face ID
-                </button>
-                <button style={{
-                  ...s.btn,
-                  background: "rgba(239,68,68,0.15)",
-                  color: T.red,
-                  border: `1px solid rgba(239,68,68,0.3)`
-                }} onClick={deleteFace}>
-                  🗑️ Remove Face ID
-                </button>
-              </>
-            )}
-
-            {(faceStep === "camera" || isCapturing) && (
-              <button style={{ ...s.btn, ...s.btnSec }} onClick={() => { stopCamera(); setFaceStep("idle"); setFaceMsg(""); }}>
-                Cancel
-              </button>
-            )}
-          </div>
-
-          {/* Info */}
-          <div style={{
-            marginTop: 20, padding: "12px 14px",
-            background: T.surface, borderRadius: 8,
-            border: `1px solid ${T.border}`, fontSize: 12, color: T.muted, lineHeight: 1.6
-          }}>
-            🛡️ <strong>Privacy:</strong> Your face data is stored only on your own server.
-            No external API is used — the FaceNet model runs fully locally.
-          </div>
-        </div>
-
+        <label style={s.label}>Currency</label>
+        <select style={s.input} value={prefs.currency} onChange={e => persist({ currency: e.target.value })}>
+          <option value="USD">USD ($)</option>
+          <option value="PKR">PKR (₨)</option>
+          <option value="INR">INR (₹)</option>
+          <option value="EUR">EUR (€)</option>
+        </select>
       </div>
     </div>
   );
