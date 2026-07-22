@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { T, s } from "../theme";
+import { T, s, applyThemeVars } from "../theme";
 
 const BASE = "http://localhost:8000";
 
@@ -76,6 +76,9 @@ export default function Settings({ user }) {
       if (!r.ok) throw new Error(d.detail || "Failed to load settings");
       setPrefs(d.preferences);
       setTwoFA(d.two_fa_enabled);
+      // Account is the source of truth — sync CSS vars in case this device's
+      // cached theme (from a previous login) is stale.
+      applyThemeVars(d.preferences.theme, d.preferences.accent);
     } catch (e) {
       setLoadErr("Settings load nahi ho saki — server check karo");
     }
@@ -247,7 +250,7 @@ export default function Settings({ user }) {
           right={
             <div style={{ display: "flex", gap: 6, background: T.surface, borderRadius: 999, padding: 3, border: `1px solid ${T.border}` }}>
               {["dark", "light"].map(t => (
-                <button key={t} onClick={() => persist({ theme: t })}
+                <button key={t} onClick={() => { applyThemeVars(t, prefs.accent); persist({ theme: t }); }}
                   style={{
                     padding: "6px 14px", borderRadius: 999, border: "none", cursor: "pointer",
                     fontSize: 12, fontWeight: 600, textTransform: "capitalize",
@@ -263,7 +266,7 @@ export default function Settings({ user }) {
           right={
             <div style={{ display: "flex", gap: 8 }}>
               {ACCENTS.map(c => (
-                <button key={c} onClick={() => persist({ accent: c })}
+                <button key={c} onClick={() => { applyThemeVars(prefs.theme, c); persist({ accent: c }); }}
                   style={{
                     width: 22, height: 22, borderRadius: "50%", background: c, cursor: "pointer",
                     border: prefs.accent === c ? `2px solid ${T.text || "#fff"}` : "2px solid transparent",
@@ -273,23 +276,27 @@ export default function Settings({ user }) {
             </div>
           } />
         <div style={{ fontSize: 11, color: T.muted, marginTop: 10 }}>
-          Theme/accent are saved to your account now — hooking them up to actually re-skin the
-          app live is a separate step (would live in <code>theme.js</code>).
+          Changes apply instantly across the whole app and are saved to your account, so they
+          carry over next time you log in on any device.
         </div>
       </div>
 
       {/* Security */}
       <div style={{ ...s.card, marginBottom: 20 }}>
         <div style={s.h3}>🛡️ Security</div>
-        <Row icon="🔒" title="Two-factor authentication" desc="Extra verification code at login, in addition to Face ID"
+        <Row icon="🔒" title="Two-factor authentication" desc="Extra email code at login, on top of your password and Face ID"
           right={<Toggle checked={twoFA} onChange={toggleTwoFA} />} />
         <div style={{ fontSize: 11, color: T.muted, padding: "4px 0 10px" }}>
-          Currently just stores the preference — enforcing an OTP step at login is a follow-up
-          change in <code>routes/auth.py</code>'s <code>login()</code>.
+          When on, a 6-digit code is emailed to you as the final step at login — after your
+          password and Face ID check succeed.
         </div>
 
         <div style={{ padding: "14px 0" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>💻 Active sessions</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>💻 Recent sign-ins</div>
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>
+            Only your latest sign-in stays active — logging in elsewhere or hitting "sign out of
+            other devices" instantly invalidates the rest.
+          </div>
           {(sessions || [{ device: "This device", location: "Current session", current: true }]).map((sess, i) => (
             <div key={i} style={{
               display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -298,9 +305,12 @@ export default function Settings({ user }) {
             }}>
               <div>
                 <div style={{ fontWeight: 600 }}>{sess.device || "Unknown device"}</div>
-                <div style={{ color: T.muted, fontSize: 12 }}>{sess.location || "Unknown location"}</div>
+                <div style={{ color: T.muted, fontSize: 12 }}>
+                  {sess.location || "Unknown location"}
+                  {sess.last_seen && ` · ${new Date(sess.last_seen).toLocaleString()}`}
+                </div>
               </div>
-              {sess.current && <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 11 }}>This device</span>}
+              {sess.current && <span style={{ ...s.badge, ...s.badgeGreen, fontSize: 11 }}>Active</span>}
             </div>
           ))}
           <button style={{ ...s.btn, ...s.btnSec, marginTop: 4 }} onClick={signOutOthers}>

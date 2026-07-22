@@ -158,21 +158,38 @@ def set_two_fa(body: TwoFAIn):
 @router.get("/sessions")
 def get_sessions(token: str):
     """
-    NexaGuard's auth model stores exactly one active token per user (see
-    routes/auth.py — login() overwrites it), so there is no real multi-device
-    session table yet. This returns the most recent login's IP/device as a
-    single "current session" entry, which is honest about what the backend
-    actually tracks today. A true multi-session list would need a separate
-    `sessions` table keyed by token, created at login and removed at logout.
+    NexaGuard's auth model stores exactly one *active* token per user (see
+    routes/auth.py — login() overwrites it, and sign-out-others rotates it),
+    so there's never more than one valid session at a time. What this returns
+    is real: the last 5 logins from `login_history`, with the most recent one
+    (the one matching the current token) flagged as the active session.
     """
     user = get_user_by_token(token)
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT device, ip, city, country, created_at
+        FROM login_history WHERE user_id=%s
+        ORDER BY created_at DESC LIMIT 5
+    """, (user["id"],))
+    rows = cur.fetchall()
+    cur.close()
+    con.close()
+
+    def fmt_location(r):
+        parts = [p for p in [r["city"], r["country"]] if p]
+        return ", ".join(parts) if parts else (r["ip"] or "Unknown location")
+
+    if not rows:
+        return {"sessions": [{"device": "This device", "location": "Current session", "current": True}]}
+
     return {
         "sessions": [{
-            "device": user["last_login_device"] or "This device",
-            "location": user["last_login_ip"] or "Unknown location",
-            "last_seen": str(user["last_login_at"]) if user["last_login_at"] else None,
-            "current": True,
-        }]
+            "device": r["device"] or "Unknown device",
+            "location": fmt_location(r),
+            "last_seen": str(r["created_at"]) if r["created_at"] else None,
+            "current": i == 0,
+        } for i, r in enumerate(rows)]
     }
 
 

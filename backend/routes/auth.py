@@ -109,6 +109,20 @@ def init_db():
     """)
     # Safety net in case the table already existed without this column
     cur.execute("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT 'signup'")
+
+    # Real login history so Settings → "Recent sign-ins" shows genuine data
+    # instead of a single fabricated "This device" row.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS login_history (
+            id         SERIAL PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ip         TEXT,
+            device     TEXT,
+            city       TEXT,
+            country    TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
     con.commit()
     cur.close()
     con.close()
@@ -343,14 +357,99 @@ def login(body: LoginIn, request: Request):
             "UPDATE users SET token=%s, last_login_ip=%s, last_login_device=%s, last_login_at=NOW() WHERE id=%s",
             (token, client_ip, user_agent, row["id"])
         )
+
+        # Record this login for the real "Recent sign-ins" list in Settings.
+        loc = get_ip_location(client_ip) or {}
+        cur.execute(
+            "INSERT INTO login_history (user_id, ip, device, city, country) VALUES (%s,%s,%s,%s,%s)",
+            (row["id"], client_ip, user_agent, loc.get("city"), loc.get("country"))
+        )
+        # Keep only the last 5 per user so the table doesn't grow unbounded.
+        cur.execute("""
+            DELETE FROM login_history WHERE id IN (
+                SELECT id FROM login_history WHERE user_id=%s
+                ORDER BY created_at DESC OFFSET 5
+            )
+        """, (row["id"],))
+
+        # Is 2FA turned on for this user? (user_settings row may not exist yet)
+        cur.execute("SELECT two_fa_enabled FROM user_settings WHERE user_id=%s", (row["id"],))
+        setting_row = cur.fetchone()
+        requires_2fa = bool(setting_row["two_fa_enabled"]) if setting_row else False
+
         con.commit()
         from routes.alerts import create_alert
         login_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
         create_alert(row["id"], row["email"], "info", "login",
                     f"Someone logged into your account on {login_time}",
                     {"email": row["email"], "time": login_time})
-        return {"token": token, "user": {"id": row["id"], "name": row["name"],
+        return {"token": token, "requires_2fa": requires_2fa,
+                "user": {"id": row["id"], "name": row["name"],
                 "email": row["email"], "role": row["role"], "balance": float(row["balance"])}}
+    finally:
+        cur.close(); con.close()
+
+
+class TokenIn(BaseModel):
+    token: str
+
+
+class Verify2FAIn(BaseModel):
+    token: str
+    otp: str
+
+
+@router.post("/send-login-2fa")
+def send_login_2fa(body: TokenIn):
+    """Sends the OTP for the extra 2FA step, called after face verification
+    succeeds during login (see Settings → Security → Two-factor authentication)."""
+    con = get_db()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT id, name, email FROM users WHERE token=%s", (body.token,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(401, "Invalid session — please log in again.")
+
+        otp = generate_otp()
+        expires = datetime.now() + timedelta(minutes=10)
+        cur.execute("INSERT INTO otp_codes (email, otp, expires_at, purpose) VALUES (%s,%s,%s,%s)",
+                    (row["email"], otp, expires, "login_2fa"))
+        con.commit()
+        send_email(row["email"], "NexaGuard — Your Login Code", otp_email(row["name"], otp))
+        return {"message": "OTP sent to your email", "email": row["email"]}
+    finally:
+        cur.close(); con.close()
+
+
+@router.post("/verify-login-2fa")
+def verify_login_2fa(body: Verify2FAIn):
+    con = get_db()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT id, email FROM users WHERE token=%s", (body.token,))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise HTTPException(401, "Invalid session — please log in again.")
+
+        cur.execute("""
+            SELECT id, otp, expires_at, used FROM otp_codes
+            WHERE email=%s AND purpose='login_2fa' ORDER BY id DESC LIMIT 1
+        """, (user_row["email"],))
+        row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(400, "No code found. Please request a new one.")
+        if row["used"] == 1:
+            raise HTTPException(400, "This code has already been used.")
+        if datetime.now() > row["expires_at"].replace(tzinfo=None):
+            raise HTTPException(400, "Code expired. Request a new one.")
+        if row["otp"] != body.otp:
+            raise HTTPException(400, "Invalid code.")
+
+        cur.execute("UPDATE otp_codes SET used=1 WHERE id=%s", (row["id"],))
+        con.commit()
+        return {"success": True}
     finally:
         cur.close(); con.close()
 @router.get("/me")

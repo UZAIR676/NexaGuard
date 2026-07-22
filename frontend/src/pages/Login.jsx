@@ -5,13 +5,19 @@ export default function Login({ onAuth, goSignup, goForgotPassword }) {
   const [form, setForm]       = useState({ email: "", password: "" });
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
-  const [step, setStep]       = useState("login"); // "login" | "face" | "face-register"
+  const [step, setStep]       = useState("login"); // "login" | "face" | "face-register" | "otp2fa"
   const [userData, setUserData] = useState(null);
   const [faceLoading, setFaceLoading] = useState(false);
   const [faceMsg, setFaceMsg] = useState("");
   const [faceErr, setFaceErr] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [frames, setFrames]   = useState([]);
+
+  // ── 2FA state (final step, only runs if the account has it turned on) ───
+  const [otpCode, setOtpCode]   = useState("");
+  const [otpErr, setOtpErr]     = useState("");
+  const [otpMsg, setOtpMsg]     = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -43,7 +49,7 @@ export default function Login({ onAuth, goSignup, goForgotPassword }) {
         `http://localhost:8000/api/face/status?token=${data.token}`
       ).then(r => r.json());
 
-      setUserData({ token: data.token, user: data.user });
+      setUserData({ token: data.token, user: data.user, requires2FA: !!data.requires_2fa });
 
       if (faceStatus.registered) {
         // Face registered → must verify, no bypass
@@ -144,14 +150,7 @@ export default function Login({ onAuth, goSignup, goForgotPassword }) {
 
       if (verifyRes.verified) {
         setFaceMsg(`✅ Face verified! Similarity: ${(verifyRes.similarity * 100).toFixed(1)}%`);
-
-        // ✅ FIX: Only persist the token now, after face verification
-        // has actually succeeded. This is what prevents "refresh skips
-        // face check" — there's nothing in localStorage until this point.
-        localStorage.setItem("ng_token", userData.token);
-
-        stopCamera();
-        setTimeout(() => onAuth(userData.user), 1000);
+        setTimeout(() => afterFaceSuccess(), 1000);
       } else {
         setFaceErr(`❌ Face did not match — similarity: ${(verifyRes.similarity * 100).toFixed(1)}%. Please try again.`);
       }
@@ -197,17 +196,69 @@ export default function Login({ onAuth, goSignup, goForgotPassword }) {
         return;
       }
       setFaceMsg("✅ Face registered successfully!");
-
-      // ✅ FIX: Same as above — persist token only after registration
-      // (which itself requires a captured face) actually succeeds.
-      localStorage.setItem("ng_token", userData.token);
-
-      stopCamera();
-      setTimeout(() => onAuth(userData.user), 1000);
+      setTimeout(() => afterFaceSuccess(), 1000);
     } catch {
       setFaceErr("Could not connect to server.");
     }
     setFaceLoading(false);
+  };
+
+  // ── Final gate after password + Face ID both succeed ────────────────────
+  // Only NOW do we persist the token — refreshing mid-flow still can't skip
+  // any step. If 2FA is off, this logs the user straight in.
+  const afterFaceSuccess = () => {
+    if (userData.requires2FA) {
+      goToOtp();
+    } else {
+      localStorage.setItem("ng_token", userData.token);
+      stopCamera();
+      onAuth(userData.user);
+    }
+  };
+
+  const goToOtp = async () => {
+    setOtpErr(""); setOtpMsg(""); setOtpCode("");
+    setOtpLoading(true);
+    try {
+      const r = await fetch("http://localhost:8000/api/auth/send-login-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: userData.token }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setFaceErr(d.detail || "Could not send code"); return; }
+      setOtpMsg(`Code sent to ${d.email}`);
+      stopCamera();
+      setStep("otp2fa");
+    } catch {
+      setFaceErr("Could not connect to server.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const resendOtp = () => goToOtp();
+
+  const verifyOtp2FA = async () => {
+    if (!otpCode || otpCode.length < 4) { setOtpErr("Enter the code from your email."); return; }
+    setOtpErr("");
+    setOtpLoading(true);
+    try {
+      const r = await fetch("http://localhost:8000/api/auth/verify-login-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: userData.token, otp: otpCode }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setOtpErr(d.detail || "Invalid code"); return; }
+
+      localStorage.setItem("ng_token", userData.token);
+      onAuth(userData.user);
+    } catch {
+      setOtpErr("Could not connect to server.");
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
   const guest = () => onAuth({ name: "Guest", email: "guest@nexaguard.ai" });
@@ -423,6 +474,60 @@ export default function Login({ onAuth, goSignup, goForgotPassword }) {
               ].map(f => (
                 <div key={f} style={{ fontSize: 14, color: T.text, textAlign: "left" }}>{f}</div>
               ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: 2FA OTP Step (only if the account has it turned on) ────────
+  if (step === "otp2fa") {
+    return (
+      <div style={s.authWrap}>
+        <div style={{ ...s.authLeft, maxWidth: 480 }}>
+          <div style={s.logo}>
+            <div style={s.logoIcon}>🛡️</div>
+            <span style={s.logoText}>NexaGuard</span>
+          </div>
+
+          <div style={s.authTitle}>Enter your code</div>
+          <div style={s.authSub}>
+            Two-factor authentication is on for this account. We emailed a 6-digit code to{" "}
+            <strong>{userData?.user?.email}</strong>.
+          </div>
+
+          <label style={s.label}>Verification code</label>
+          <input
+            style={{ ...s.input, letterSpacing: 4, fontSize: 20, textAlign: "center" }}
+            type="text" inputMode="numeric" maxLength={6} placeholder="000000"
+            value={otpCode}
+            onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={e => e.key === "Enter" && verifyOtp2FA()}
+            onFocus={e => e.target.style.borderColor = T.accent}
+            onBlur={e => e.target.style.borderColor = T.border}
+          />
+
+          {otpMsg && <div style={{ color: T.green, fontSize: 13, marginTop: 10 }}>✅ {otpMsg}</div>}
+          {otpErr && <div style={{ color: T.red, fontSize: 13, marginTop: 10 }}>{otpErr}</div>}
+
+          <button style={{ ...s.btn, opacity: otpLoading ? 0.7 : 1 }} onClick={verifyOtp2FA} disabled={otpLoading}>
+            {otpLoading ? "Verifying..." : "Verify & Sign In"}
+          </button>
+          <span style={{ ...s.link, fontSize: 13 }} onClick={resendOtp}>
+            Didn't get it? Resend code
+          </span>
+        </div>
+
+        <div style={s.authRight}>
+          <div style={{ position: "relative", textAlign: "center", zIndex: 1 }}>
+            <div style={{ fontSize: 56, marginBottom: 20 }}>📧</div>
+            <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 12, color: T.text }}>
+              One last check
+            </div>
+            <div style={{ color: T.muted, fontSize: 15, lineHeight: 1.8, maxWidth: 360 }}>
+              This code confirms it's really you, on top of your password and Face ID — turn it off
+              anytime from Settings → Security.
             </div>
           </div>
         </div>
