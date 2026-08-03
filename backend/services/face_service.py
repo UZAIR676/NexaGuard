@@ -7,11 +7,28 @@ import numpy as np
 import os
 import json
 import base64
-from deepface import DeepFace
 from datetime import datetime
 from routes.auth import get_db
 
 DETECTOR_BACKEND = "mtcnn"
+
+# ── Lazy DeepFace import ─────────────────────────────────────────────────
+# `import deepface` drags in TensorFlow, which is the #1 reason the server
+# used to take 1-1.5 min to boot — it was loading on every startup even
+# for requests that never touch face recognition. Importing it only on the
+# first actual face request means `uvicorn` comes up in a couple seconds;
+# the cost just moves to whichever request needs it first (~15-30s once,
+# then it's cached in memory for every request after that).
+_DeepFace = None
+
+def _deepface():
+    global _DeepFace
+    if _DeepFace is None:
+        print("⏳ Loading DeepFace/TensorFlow (first face request only)...")
+        from deepface import DeepFace as _df
+        _DeepFace = _df
+        print("✅ DeepFace ready.")
+    return _DeepFace
 
 # ── DB setup ──────────────────────────────────────────────────────────────
 def _init_face_table():
@@ -50,7 +67,7 @@ def get_embedding(img: np.ndarray) -> dict:
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         # enforce_detection=False — low light ya angle mein bhi kaam kare
-        faces = DeepFace.extract_faces(
+        faces = _deepface().extract_faces(
             rgb_img,
             detector_backend=DETECTOR_BACKEND,
             enforce_detection=False,   # ← FIX: pehle True tha
@@ -67,7 +84,7 @@ def get_embedding(img: np.ndarray) -> dict:
         if face_conf < 0.3 and not facial_area:
             return {"error": f"Face confidence too low ({face_conf:.2f}). Improve lighting and try again."}
 
-        emb = DeepFace.represent(
+        emb = _deepface().represent(
             rgb_img,
             model_name="Facenet",
             detector_backend=DETECTOR_BACKEND,
@@ -177,7 +194,7 @@ def check_liveness(frames_b64: list) -> dict:
             continue
         try:
             rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            faces = DeepFace.extract_faces(
+            faces = _deepface().extract_faces(
                 rgb_img,
                 detector_backend=DETECTOR_BACKEND,
                 enforce_detection=False,

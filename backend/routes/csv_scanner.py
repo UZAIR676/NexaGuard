@@ -1,22 +1,25 @@
 """
 NexaGuard — CSV Bulk Fraud Scanner (Batch Mode + DB Save)
+Now on Postgres (same DB as everything else) instead of a separate
+nexaguard.db SQLite file — one database, one source of truth.
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 import pandas as pd
 import numpy as np
-import io, csv, warnings, sqlite3, os, json
-from datetime import datetime
+import io, csv, warnings, json
 warnings.filterwarnings('ignore')
 
 router = APIRouter(prefix="/api/csv", tags=["csv"])
-DB     = os.path.join(os.path.dirname(__file__), '..', 'nexaguard.db')
+
+from routes.auth import get_db, get_user_by_token
 
 def init_db():
-    con = sqlite3.connect(DB)
-    con.execute("""
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS csv_scans (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            id            SERIAL PRIMARY KEY,
             user_token    TEXT,
             filename      TEXT,
             total         INTEGER,
@@ -25,16 +28,16 @@ def init_db():
             fraud_rate    REAL,
             total_blocked REAL,
             results       TEXT,
-            created_at    TEXT DEFAULT (datetime('now'))
+            created_at    TIMESTAMP DEFAULT NOW()
         )
     """)
     con.commit()
+    cur.close()
     con.close()
 
 init_db()
 
 from services.fraud_detection import model, scaler_amount, scaler_time
-from routes.auth import get_user_by_token
 
 def require_staff(token: str):
     user = get_user_by_token(token)
@@ -111,13 +114,14 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
         "results":       results,
     }
 
-    # ✅ FIX: cursor pe lastrowid hota hai, connection pe nahi
     try:
-        con = sqlite3.connect(DB)
-        cur = con.execute("""
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("""
             INSERT INTO csv_scans
               (user_token, filename, total, fraud_count, safe_count, fraud_rate, total_blocked, results)
-            VALUES (?,?,?,?,?,?,?,?)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (
             token, file.filename, total, fraud_count,
             total - fraud_count,
@@ -125,8 +129,9 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
             round(total_blocked, 2),
             json.dumps(results[:1000]),
         ))
-        scan_data["scan_id"] = cur.lastrowid   # ✅ cur.lastrowid
+        scan_data["scan_id"] = cur.fetchone()["id"]
         con.commit()
+        cur.close()
         con.close()
     except Exception as e:
         print(f"DB save error: {e}")
@@ -138,19 +143,25 @@ async def scan_csv(file: UploadFile = File(...), token: str = ""):
 async def get_history(token: str = ""):
     require_staff(token)
     try:
-        con  = sqlite3.connect(DB)
-        rows = con.execute("""
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("""
             SELECT id, filename, total, fraud_count, fraud_rate, total_blocked, created_at
-            FROM csv_scans WHERE user_token=?
+            FROM csv_scans WHERE user_token=%s
             ORDER BY created_at DESC LIMIT 20
-        """, (token,)).fetchall()
+        """, (token,))
+        rows = cur.fetchall()
+        cur.close()
         con.close()
         return [
-            {"id": r[0], "filename": r[1], "total": r[2], "fraud_count": r[3],
-             "fraud_rate": r[4], "total_blocked": r[5], "created_at": r[6]}
+            {"id": r["id"], "filename": r["filename"], "total": r["total"],
+             "fraud_count": r["fraud_count"], "fraud_rate": r["fraud_rate"],
+             "total_blocked": r["total_blocked"],
+             "created_at": str(r["created_at"]) if r["created_at"] else None}
             for r in rows
         ]
-    except:
+    except Exception as e:
+        print(f"History fetch error: {e}")
         return []
 
 
@@ -158,20 +169,23 @@ async def get_history(token: str = ""):
 async def get_scan_detail(scan_id: int, token: str = ""):
     require_staff(token)
     try:
-        con = sqlite3.connect(DB)
-        row = con.execute("""
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("""
             SELECT id, filename, total, fraud_count, safe_count, fraud_rate, total_blocked, results, created_at
-            FROM csv_scans WHERE id=? AND user_token=?
-        """, (scan_id, token)).fetchone()
+            FROM csv_scans WHERE id=%s AND user_token=%s
+        """, (scan_id, token))
+        row = cur.fetchone()
+        cur.close()
         con.close()
         if not row:
             raise HTTPException(404, "Scan not found")
         return {
-            "id": row[0], "filename": row[1], "total": row[2],
-            "fraud_count": row[3], "safe_count": row[4],
-            "fraud_rate": row[5], "total_blocked": row[6],
-            "results": json.loads(row[7]),
-            "created_at": row[8],
+            "id": row["id"], "filename": row["filename"], "total": row["total"],
+            "fraud_count": row["fraud_count"], "safe_count": row["safe_count"],
+            "fraud_rate": row["fraud_rate"], "total_blocked": row["total_blocked"],
+            "results": json.loads(row["results"]),
+            "created_at": str(row["created_at"]) if row["created_at"] else None,
         }
     except HTTPException:
         raise

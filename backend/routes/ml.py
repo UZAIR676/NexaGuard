@@ -112,16 +112,27 @@ def load_model():
 
     return model, scalers, model_type
 
-print("🔄 Loading ML model...")
-try:
-    MODEL, SCALERS, MODEL_TYPE = load_model()
+# Was eagerly loaded here at import time — this duplicated the same
+# tensorflow.keras load that services/lstm_predictor.py also does, so the
+# server was paying that ~10-20s cost TWICE on every startup. Now it's
+# lazy: _ensure_model_loaded() is called on first request to any endpoint
+# below instead, so uvicorn boots in seconds.
+MODEL, SCALERS, MODEL_TYPE = None, None, None
+
+def _ensure_model_loaded():
+    global MODEL, SCALERS, MODEL_TYPE
     if MODEL is not None:
-        print(f"✅ ML Model loaded! Type: {MODEL_TYPE}")
-    else:
-        print("⚠️ ML Model not loaded — XGBoost use hoga agar available ho")
-except Exception as e:
-    print(f"⚠️ ML load error: {e}")
-    MODEL, SCALERS, MODEL_TYPE = None, None, None
+        return
+    print("🔄 Loading ML model (first request)...")
+    try:
+        MODEL, SCALERS, MODEL_TYPE = load_model()
+        if MODEL is not None:
+            print(f"✅ ML Model loaded! Type: {MODEL_TYPE}")
+        else:
+            print("⚠️ ML Model not loaded — XGBoost use hoga agar available ho")
+    except Exception as e:
+        print(f"⚠️ ML load error: {e}")
+        MODEL, SCALERS, MODEL_TYPE = None, None, None
 
 # ── Feature Engineering ────────────────────────────────────────────────────
 def add_features(df):
@@ -161,6 +172,7 @@ def add_features(df):
 
 # ── Predict Core ───────────────────────────────────────────────────────────
 def predict_symbol(sym: str):
+    _ensure_model_loaded()
     if MODEL is None:
         return {"error": "Model not loaded. Run: python ml/train.py --model xgboost"}
 

@@ -46,7 +46,11 @@ def load_model():
         print(f"⚠️ ML Model not loaded: {e}")
         return False
 
-load_model()
+# Was `load_model()` called eagerly here — that's the #1 reason startup
+# used to take so long (it eagerly imports tensorflow.keras). Now it's
+# loaded lazily on the first /predict call instead (see predict_symbol
+# below), so uvicorn boots in seconds and the ~10-20s model-load cost only
+# happens once, on whichever request actually needs it first.
 
 # ── Feature Engineering ────────────────────────────────────────────────────
 def add_features(df):
@@ -86,6 +90,8 @@ def add_features(df):
 
 # ── Predict ────────────────────────────────────────────────────────────────
 def predict_symbol(symbol: str) -> dict:
+    if _model is None:
+        load_model()   # first call pays the tensorflow-load cost, not server startup
     if _model is None:
         return {"error": "Model not loaded. Train first: python ml/train.py"}
 
