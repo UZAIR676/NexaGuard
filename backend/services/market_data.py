@@ -225,13 +225,21 @@ def get_stock_history(symbol: str, period: str = "3mo", interval: str = "1d") ->
 
         records = []
         for date, row in hist.iterrows():
+            # yfinance sometimes returns NaN for Open/High/Low/Close/Volume on
+            # partial-data days (common for index tickers like ^GSPC) — these
+            # weren't guarded like the indicator columns below, so a NaN here
+            # crashed JSON serialization with "Out of range float values are
+            # not JSON compliant". Skip rows with no real price data.
+            if pd.isna(row["Open"]) or pd.isna(row["High"]) or pd.isna(row["Low"]) or pd.isna(row["Close"]):
+                continue
+
             records.append({
                 "date":      date.strftime("%Y-%m-%d"),
                 "open":      round(row["Open"],  2),
                 "high":      round(row["High"],  2),
                 "low":       round(row["Low"],   2),
                 "close":     round(row["Close"], 2),
-                "volume":    int(row["Volume"]),
+                "volume":    int(row["Volume"]) if pd.notna(row["Volume"]) else 0,
                 # Indicators
                 "ema20":     round(row["EMA_20"],   2) if pd.notna(row["EMA_20"])   else None,
                 "ema50":     round(row["EMA_50"],   2) if pd.notna(row["EMA_50"])   else None,
