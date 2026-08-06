@@ -10,7 +10,14 @@ export default function AdminPanel({ user }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg]       = useState("");
 
+  // Daily report tab
+  const [reportDate, setReportDate]       = useState(new Date().toISOString().slice(0, 10));
+  const [reportSummary, setReportSummary] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportErr, setReportErr]         = useState("");
+
   useEffect(() => { loadUsers(); loadTxns(); }, []);
+  useEffect(() => { if (tab === "reports") loadReportSummary(); }, [tab]);
 
   const token = localStorage.getItem("ng_token");
   const pendingTxns = txns.filter(t => t.status === "pending");
@@ -51,6 +58,23 @@ export default function AdminPanel({ user }) {
       const data = await res.json();
       setTxns(Array.isArray(data) ? data : []);
     } catch { }
+  };
+
+  const loadReportSummary = async (dateOverride) => {
+    const d = dateOverride || reportDate;
+    setReportLoading(true);
+    setReportErr("");
+    try {
+      const res = await fetch(`${BASE}/api/reports/daily-summary?token=${token}&date=${d}`);
+      const data = await res.json();
+      if (!res.ok) { setReportErr(data.detail || "Failed to load report"); setReportSummary(null); }
+      else setReportSummary(data);
+    } catch { setReportErr("Server error"); setReportSummary(null); }
+    setReportLoading(false);
+  };
+
+  const downloadReport = () => {
+    window.open(`${BASE}/api/reports/daily-export?token=${token}&date=${reportDate}`, "_blank");
   };
 
   const changeRole = async (userId, role) => {
@@ -148,7 +172,7 @@ export default function AdminPanel({ user }) {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {[["users","👥 Users"], ["transactions","💳 Transactions"], ["pending", `⏳ Pending Review${pendingTxns.length ? ` (${pendingTxns.length})` : ""}`]].map(([t, label]) => (
+        {[["users","👥 Users"], ["transactions","💳 Transactions"], ["pending", `⏳ Pending Review${pendingTxns.length ? ` (${pendingTxns.length})` : ""}`], ["reports", "📅 Daily Report"]].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             style={{ ...s.navItem, ...(tab === t ? s.navItemActive : {}) }}>
             {label}
@@ -340,6 +364,56 @@ export default function AdminPanel({ user }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Daily Report Tab */}
+      {tab === "reports" && (
+        <div style={s.card}>
+          <div style={{ ...s.h3, marginBottom: 4 }}>📅 End-of-Day Transaction Report</div>
+          <div style={{ ...s.muted, marginBottom: 16 }}>
+            Real transaction data for the selected day, with each transaction's fraud score —
+            same score computed live when it was made, nothing re-scanned or re-guessed.
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+            <input
+              type="date"
+              value={reportDate}
+              onChange={e => setReportDate(e.target.value)}
+              style={{ ...s.input, width: 180 }}
+            />
+            <button style={{ ...s.btn, width: "auto", margin: 0, padding: "10px 18px" }}
+              onClick={() => loadReportSummary()} disabled={reportLoading}>
+              {reportLoading ? "Loading..." : "View Summary"}
+            </button>
+            <button style={{ ...s.btn, ...s.btnSec, width: "auto", margin: 0, padding: "10px 18px" }}
+              onClick={downloadReport}>
+              ⬇ Download CSV
+            </button>
+          </div>
+
+          {reportErr && (
+            <div style={{ color: T.red, fontSize: 13, marginBottom: 16 }}>{reportErr}</div>
+          )}
+
+          {reportSummary && (
+            <div style={s.grid4}>
+              {[
+                ["Total Transactions", reportSummary.total_transactions, T.text],
+                ["Total Volume",       `$${reportSummary.total_volume.toLocaleString()}`, T.text],
+                ["Completed",          reportSummary.completed, T.green],
+                ["Pending",            reportSummary.pending, T.amber],
+                ["Blocked",            reportSummary.blocked, T.red],
+                ["Flagged as Fraud",   reportSummary.flagged_as_fraud, T.red],
+                ["Avg Fraud Score",    `${reportSummary.avg_fraud_score}%`, T.accent],
+              ].map(([label, val, color]) => (
+                <div key={label} style={s.statCard}>
+                  <div style={s.statLabel}>{label}</div>
+                  <div style={{ ...s.statVal, color, fontSize: 20 }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
