@@ -115,6 +115,20 @@ def predict_symbol(symbol: str) -> dict:
         scaled = scaler.transform(df[features])
         seq    = scaled[-seq_len:].reshape(1, seq_len, len(features))
 
+        # ── FIX: missing "price" field ──────────────────────────────────
+        # Ye function pehle current price return hi nahi karta tha, isliye
+        # frontend mein mlResult.price hamesha undefined -> "$NaN" dikhta
+        # tha. Ab last valid (non-NaN) close price nikal ke return karte
+        # hain — agar koi valid price na mile to explicit error dete hain,
+        # chup chaap NaN pass nahi karte.
+        current_price = df['Close'].iloc[-1]
+        if pd.isna(current_price):
+            valid_closes = df['Close'].dropna()
+            if valid_closes.empty:
+                return {"error": f"No valid price data for {symbol}"}
+            current_price = valid_closes.iloc[-1]
+        current_price = float(current_price)
+
         if model_type == 'lstm':
             prob = float(_model.predict(seq, verbose=0)[0][0])
         elif model_type == 'xgboost':
@@ -133,6 +147,7 @@ def predict_symbol(symbol: str) -> dict:
 
         return {
             "symbol":      symbol.upper(),
+            "price":       current_price,
             "up_prob":     round(prob * 100, 2),
             "down_prob":   round((1 - prob) * 100, 2),
             "signal":      signal,

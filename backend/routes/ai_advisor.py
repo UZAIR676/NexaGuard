@@ -9,6 +9,7 @@ from groq import Groq
 
 from services.market_data import get_quote, get_batch_quotes, SP500_TOP50
 from services.technical_indicators import analyze_stock
+from routes.news import _fetch_headlines, _analyze_sentiment
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -168,13 +169,33 @@ def build_context(symbols: list) -> str:
         except:
             ml_line = "    ML Signal  : Not available"
 
+        # News Sentiment — same headlines + Groq classification used by the
+        # MarketData page's "Combined AI Outlook", so the chat and the
+        # dashboard never disagree about what the news is saying.
+        try:
+            articles   = _fetch_headlines(sym, limit=6)
+            sentiments = _analyze_sentiment([a["title"] for a in articles])
+            bullish    = sum(1 for x in sentiments if x == "Bullish")
+            bearish    = sum(1 for x in sentiments if x == "Bearish")
+            total      = len(sentiments) or 1
+            news_score = round((bullish - bearish) / total * 100, 1)
+            headline_sample = "; ".join(a["title"] for a in articles[:2]) if articles else "none found"
+            news_line = (
+                f"    News Sent. : {news_score:+.1f} ({bullish} bullish / {bearish} bearish / "
+                f"{total - bullish - bearish} neutral of {total} headlines)\n"
+                f"    Top News   : {headline_sample}"
+            )
+        except Exception:
+            news_line = "    News Sent. : Not available"
+
         block = (
             f"  {sym}:\n"
             f"    Price      : ${price} | Today: {direction} {abs(chg)}%\n"
             f"    52W Range  : ${low52} – ${high52} | Market Cap: {cap_str}\n"
             f"    Tech Score : {tech_score}/100 | Signal: {tech_signal}\n"
             f"    RSI        : {rsi} | MACD: {macd} | Trend: {tech_trend}\n"
-            f"{ml_line}"
+            f"{ml_line}\n"
+            f"{news_line}"
         )
         blocks.append(block)
 
@@ -193,11 +214,12 @@ SYSTEM = """You are NexaGuard AI — a sharp, data-driven financial advisor back
 📍 Current price + today's movement
 📊 Tech Score + RSI + MACD signal
 🤖 ML Prediction signal
-🎯 BUY / HOLD / SELL — clear signal with reasoning
+📰 News sentiment — mention the score and briefly reference what the top headlines are actually about, not just the number
+🎯 BUY / HOLD / SELL — clear signal with reasoning, weighing technicals AND news together. If they disagree (e.g. technicals bullish but news bearish), say so explicitly — that disagreement is itself useful information, don't paper over it.
 ⚡ Key risk or opportunity
 🛡️ Powered by NexaGuard Intelligence — invest with data, not emotion.
 
-Max 220 words. Be direct and conversational — sound like a knowledgeable advisor, not a form.
+Max 240 words. Be direct and conversational — sound like a knowledgeable advisor, not a form.
 
 == LANGUAGE RULE ==
 Always reply ONLY in English, regardless of what language or script the user writes in (Urdu, Roman Urdu, Hindi, mixed, etc.). Never reply in Urdu, Hindi, Devanagari script, or any other language — English only, every time."""
@@ -240,10 +262,10 @@ def ai_chat(body: ChatIn):
     if context:
         user_msg = (
             f"{body.message}\n\n"
-            f"=== LIVE MARKET DATA + TECHNICAL ANALYSIS + ML PREDICTION ===\n"
+            f"=== LIVE MARKET DATA + TECHNICAL ANALYSIS + ML PREDICTION + NEWS SENTIMENT ===\n"
             f"{context}\n"
             f"=== END ===\n\n"
-            f"Answer using exact prices, technical signals and ML prediction above. Match user's language."
+            f"Answer using exact prices, technical signals, ML prediction, and news sentiment above. Match user's language."
         )
     else:
         user_msg = (

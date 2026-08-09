@@ -188,7 +188,20 @@ def predict_symbol(sym: str):
     scaled = scaler.transform(df[FEATURE_COLS])
     seq    = scaled[-SEQ_LEN:].reshape(1, SEQ_LEN, len(FEATURE_COLS))
 
-    current_price = float(df['Close'].iloc[-1])
+    # ── FIX: NaN price bug ──────────────────────────────────────────────
+    # yfinance kabhi kabhi aaj ka partial/incomplete row deta hai jismein
+    # Close abhi NaN hota hai (market-open se pehle ya data lag ki wajah
+    # se). Pehle seedha df['Close'].iloc[-1] le liya jata tha jo NaN ho
+    # sakta tha aur frontend mein "$NaN" dikhta tha. Ab last VALID close
+    # dhoondte hain — agar koi bhi valid close na mile to explicit error
+    # return karte hain (silently NaN pass nahi karte).
+    current_price = df['Close'].iloc[-1]
+    if pd.isna(current_price):
+        valid_closes = df['Close'].dropna()
+        if valid_closes.empty:
+            return {"error": f"No valid price data for {sym}"}
+        current_price = valid_closes.iloc[-1]
+    current_price = float(current_price)
 
     # ── Predict by model type ──────────────────────────────────────────────
     if MODEL_TYPE == 'lstm':

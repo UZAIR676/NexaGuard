@@ -111,6 +111,16 @@ export default function MarketData() {
   const [mlSearchLoading, setMlSearchLoading] = useState(false);
   const [mlSearchError, setMlSearchError]     = useState(null);
 
+  // News + combined AI outlook (fetched alongside the ML prediction above)
+  const [newsResult, setNewsResult] = useState(null);
+  const [newsError, setNewsError]   = useState(null);
+
+  // ── NEW: per-article on-demand AI summary ──
+  // Keyed by article link. { [link]: { loading, text, error } }
+  const [articleSummaries, setArticleSummaries] = useState({});
+  // Keyed by article link. { [link]: bool } — whether the summary panel is open.
+  const [expandedSummary, setExpandedSummary]   = useState({});
+
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { loadHistory(selSym, selPeriod); }, [selSym, selPeriod]);
   useEffect(() => {
@@ -160,8 +170,15 @@ export default function MarketData() {
     setMlSearchLoading(true);
     setMlResult(null);
     setMlSearchError(null);
+    setNewsResult(null);
+    setNewsError(null);
+    setArticleSummaries({});
+    setExpandedSummary({});
+
+    const sym   = resolveSymbol(mlSearch);
+    const token = localStorage.getItem("ng_token") || "";
+
     try {
-      const sym = resolveSymbol(mlSearch);
       const res = await fetch(`http://localhost:8000/api/ml/predict/${sym}`);
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
@@ -170,7 +187,41 @@ export default function MarketData() {
     } catch (e) {
       setMlSearchError(e.message || "Prediction failed");
     }
+
+    // News + sentiment is independent of the prediction above — one failing
+    // shouldn't block the other.
+    try {
+      const newsRes = await fetch(`http://localhost:8000/api/news/${sym}/outlook?token=${token}`);
+      if (!newsRes.ok) throw new Error("Could not load news");
+      const newsData = await newsRes.json();
+      setNewsResult(newsData);
+    } catch (e) {
+      setNewsError(e.message || "Could not load news");
+    }
+
     setMlSearchLoading(false);
+  };
+
+  // ── NEW: fetch (or toggle) the on-demand AI summary for one article ──
+  // Called only when the user clicks "Summary" on a specific headline —
+  // matches the backend's /api/news/article/summary design (cheap, on click).
+  const toggleSummary = async (link) => {
+    const isOpen = expandedSummary[link];
+    setExpandedSummary(prev => ({ ...prev, [link]: !isOpen }));
+
+    // Already open (just closing) or already fetched — don't refetch.
+    if (isOpen || articleSummaries[link]) return;
+
+    setArticleSummaries(prev => ({ ...prev, [link]: { loading: true } }));
+    const token = localStorage.getItem("ng_token") || "";
+    try {
+      const res  = await fetch(`http://localhost:8000/api/news/article/summary?url=${encodeURIComponent(link)}&token=${token}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setArticleSummaries(prev => ({ ...prev, [link]: { loading: false, text: data.summary, resolvedUrl: data.resolved_url } }));
+    } catch (e) {
+      setArticleSummaries(prev => ({ ...prev, [link]: { loading: false, error: e.message || "Summary fetch failed" } }));
+    }
   };
 
  const doSearch = async () => {
@@ -936,7 +987,7 @@ export default function MarketData() {
                 </button>
                 {mlResult && (
                   <button
-                    onClick={() => { setMlResult(null); setMlSearch(""); setMlSearchError(null); }}
+                    onClick={() => { setMlResult(null); setMlSearch(""); setMlSearchError(null); setNewsResult(null); setNewsError(null); setArticleSummaries({}); setExpandedSummary({}); }}
                     style={{ ...s.navItem, fontSize: 12, padding: "8px 12px" }}>
                     ✕
                   </button>
@@ -1000,6 +1051,104 @@ export default function MarketData() {
                   </div>
                 </div>
                 </>
+              )}
+
+              {/* ── News + AI Sentiment (fetched alongside the prediction above) ── */}
+              {newsError && (
+                <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, background: "#450a0a", border: `1px solid ${T.red}`, fontSize: 12, color: T.red }}>
+                  📰 {newsError}
+                </div>
+              )}
+
+              {newsResult && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ background: T.card, borderRadius: 8, padding: "14px 16px", border: `1px solid ${T.border}`, marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      🧭 Combined AI Outlook — Technicals + News
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+                      {newsResult.combined_verdict}
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>
+                      News sentiment score: <strong style={{ color: newsResult.news_sentiment_score > 20 ? T.green : newsResult.news_sentiment_score < -20 ? T.red : T.amber }}>
+                        {newsResult.news_sentiment_score > 0 ? "+" : ""}{newsResult.news_sentiment_score}
+                      </strong> ({newsResult.news_summary})
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    📰 Latest Headlines
+                  </div>
+                  {(newsResult.articles || []).length === 0 && (
+                    <div style={{ fontSize: 12, color: T.muted }}>No recent headlines found.</div>
+                  )}
+                  {(newsResult.articles || []).map((a, i) => {
+                    const sentColor =
+                      a.sentiment === "Bullish" ? T.green :
+                      a.sentiment === "Bearish" ? T.red   : T.muted;
+                    const sentBg =
+                      a.sentiment === "Bullish" ? "rgba(34,197,94,0.12)" :
+                      a.sentiment === "Bearish" ? "rgba(239,68,68,0.12)" : "rgba(107,122,153,0.12)";
+
+                    // ── NEW: per-article summary state/toggle ──
+                    const sum    = articleSummaries[a.link];
+                    const isOpen = !!expandedSummary[a.link];
+
+                    return (
+                      <div key={i} style={{ background: T.surface, borderRadius: 8, border: `1px solid ${T.border}`, marginBottom: 6, overflow: "hidden" }}>
+                        {/* Row: title + source + sentiment + source link + summary toggle */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 12px" }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 13, color: T.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {a.title}
+                            </div>
+                            <div style={{ fontSize: 11, color: T.muted }}>
+                              {a.source || "News"}{a.published ? ` · ${a.published}` : ""}
+                            </div>
+                          </div>
+
+                          <span style={{ ...s.badge, background: sentBg, color: sentColor, flexShrink: 0 }}>
+                            {a.sentiment}
+                          </span>
+
+                          {/* NEW: link to the original source */}
+                          <a href={a.link} target="_blank" rel="noopener noreferrer"
+                            style={{ ...s.navItem, fontSize: 11, padding: "4px 10px", flexShrink: 0, textDecoration: "none" }}>
+                            🔗 Source
+                          </a>
+
+                          {/* NEW: on-demand AI summary toggle */}
+                          <button
+                            onClick={() => toggleSummary(a.link)}
+                            style={{ ...s.navItem, ...(isOpen ? s.navItemActive : {}), fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>
+                            📝 {isOpen ? "Hide" : "Summary"}
+                          </button>
+                        </div>
+
+                        {/* NEW: expanded summary panel */}
+                        {isOpen && (
+                          <div style={{ padding: "0 12px 12px", fontSize: 12, color: T.muted, lineHeight: 1.6, borderTop: `1px solid ${T.border}` }}>
+                            {sum?.loading && <div style={{ paddingTop: 10 }}>⏳ Summarizing article...</div>}
+                            {sum?.error   && <div style={{ paddingTop: 10, color: T.red }}>⚠️ {sum.error}</div>}
+                            {sum?.text    && (
+                              <div style={{ paddingTop: 10 }}>
+                                {sum.text}
+                                {sum.resolvedUrl && (
+                                  <div style={{ marginTop: 8 }}>
+                                    <a href={sum.resolvedUrl} target="_blank" rel="noopener noreferrer"
+                                      style={{ color: T.accent, fontSize: 11, textDecoration: "none" }}>
+                                      🔗 Open full article →
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -1093,6 +1242,9 @@ export default function MarketData() {
             {/* Disclaimer */}
             {!mlLoading && mlSignals.length > 0 && (
               <div>
+                <p style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 16 }}>
+                  *This is for informational purposes only and not financial advice.
+                </p>
               </div>
             )}
           </div>

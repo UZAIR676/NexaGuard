@@ -10,9 +10,10 @@ from services.lstm_predictor import router as lstm_router
 from routes.csv_scanner import router as csv_router
 from routes.ml import router as ml_router
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes.face_auth import router as face_router
+from routes.face_auth import router as face_routers
 from routes.settings import router as settings_router
 from routes.reports import router as reports_router
+from routes.news import router as news_router
 
 from services.market_data import (
     get_quote, get_batch_quotes, get_all_indices,
@@ -43,9 +44,10 @@ app.include_router(lstm_router)
 app.include_router(ml_router)
 app.include_router(csv_router)
 app.include_router(alerts_router)
-app.include_router(face_router)
+app.include_router(face_routers)
 app.include_router(settings_router)
 app.include_router(reports_router)
+app.include_router(news_router)
 
 # Market endpoints
 @app.get("/api/market/summary")

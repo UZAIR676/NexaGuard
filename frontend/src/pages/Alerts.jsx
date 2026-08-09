@@ -224,6 +224,19 @@ export function Alerts({ user }) {
   const markRead = (id) => setRead(prev => new Set([...prev, id]));
   const markAllRead = () => setRead(new Set(alerts.map(a => a.id)));
 
+  const dismissAlert = async (id) => {
+    // Optimistic — remove from view immediately, don't wait on the network.
+    setAlerts(prev => prev.filter(a => a.id !== id));
+    try {
+      const res = await fetch(`${BASE}/api/alerts/${id}?token=${token}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Delete failed server-side — bring it back and let the user know
+      // rather than silently pretending it's gone.
+      fetchAlerts(true);
+    }
+  };
+
   const filtered = alerts.filter(a => {
     const catOk = filter === "all" || a.category === filter;
     const q = search.toLowerCase();
@@ -393,15 +406,13 @@ export function Alerts({ user }) {
                 {/* Badge + Dismiss */}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                   <span style={css.badge(tc)}>{tc.label}</span>
-                  {!isRead && (
-                    <button
-                      onClick={() => markRead(a.id)}
-                      style={css.dismissBtn}
-                      title="Mark as read"
-                    >
-                      ✕
+                  <button
+                    onClick={() => dismissAlert(a.id)}
+                    style={css.dismissBtn}
+                    title="Dismiss (removes permanently)"
+                  >
+                    ✕
                     </button>
-                  )}
                 </div>
               </div>
             );

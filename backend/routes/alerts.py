@@ -100,3 +100,33 @@ def _row_to_dict(r):
         "meta":       json.loads(r["meta"]) if r["meta"] else {},
         "created_at": str(r["created_at"]),
     }
+
+# ── DELETE /api/alerts/{alert_id} ──────────────────────────────────────────
+# The "✕" dismiss button on the frontend used to only update local React
+# state (markRead) — nothing ever hit the backend, so the alert stayed in
+# the database and came right back on the next refresh. This actually
+# deletes it.
+@router.delete("/{alert_id}")
+def delete_alert(alert_id: int, token: str):
+    from routes.auth import get_user_by_token, get_db
+    user = get_user_by_token(token)
+    con  = get_db()
+    cur  = con.cursor()
+
+    cur.execute("SELECT user_id FROM alerts WHERE id=%s", (alert_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); con.close()
+        raise HTTPException(404, "Alert not found")
+
+    is_owner = row["user_id"] == user["id"]
+    is_staff = user["role"] in ["admin", "analyst"]
+    if not (is_owner or is_staff):
+        cur.close(); con.close()
+        raise HTTPException(403, "Not your alert to dismiss")
+
+    cur.execute("DELETE FROM alerts WHERE id=%s", (alert_id,))
+    con.commit()
+    cur.close()
+    con.close()
+    return {"success": True, "deleted_id": alert_id}
